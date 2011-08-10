@@ -28,6 +28,7 @@
 
 #include <mach/motherboard.h>
 
+#include <plat/sched_clock.h>
 #include <plat/clcd.h>
 
 #define V2M_PA_CS7	0x10000000
@@ -202,6 +203,25 @@ static struct platform_device pmu_device = {
 	.resource	= pmu_resources,
 };
 
+#ifdef CONFIG_HAVE_ARM_TWD
+static DEFINE_TWD_LOCAL_TIMER(twd_local_timer, A9_MPCORE_TWD, IRQ_LOCALTIMER);
+
+static void __init ca9x4_twd_init(void)
+{
+	int err = twd_local_timer_register(&twd_local_timer);
+	if (err)
+		pr_err("twd_local_timer_register failed %d\n", err);
+}
+#else
+#define ca9x4_twd_init()	do {} while(0)
+#endif
+
+static void __init ct_ca9x4_timer_init(void)
+{
+	ca9x4_twd_init();
+	versatile_sched_clock_init(MMIO_P2V(V2M_SYS_24MHZ), 24000000);
+}
+
 static void __init ct_ca9x4_init_early(void)
 {
 	clkdev_add_table(lookups, ARRAY_SIZE(lookups));
@@ -254,6 +274,7 @@ struct ct_desc ct_ca9x4_desc __initdata = {
 	.map_io		= ct_ca9x4_map_io,
 	.init_early	= ct_ca9x4_init_early,
 	.init_irq	= ct_ca9x4_init_irq,
+	.timer_init	= ct_ca9x4_timer_init,
 	.init_tile	= ct_ca9x4_init,
 #ifdef CONFIG_SMP
 	.init_cpu_map	= ct_ca9x4_init_cpu_map,
