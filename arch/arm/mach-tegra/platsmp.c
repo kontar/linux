@@ -23,6 +23,7 @@
 #include <asm/hardware/gic.h>
 #include <asm/mach-types.h>
 #include <asm/smp_scu.h>
+#include <asm/soc.h>
 
 #include <mach/clk.h>
 #include <mach/iomap.h>
@@ -31,6 +32,8 @@
 #include "fuse.h"
 #include "flowctrl.h"
 #include "reset.h"
+
+#include "common.h"
 
 extern void tegra_secondary_startup(void);
 
@@ -50,7 +53,7 @@ static void __iomem *scu_base = IO_ADDRESS(TEGRA_ARM_PERIF_BASE);
 #define CPU_CLOCK(cpu)	(0x1<<(8+cpu))
 #define CPU_RESET(cpu)	(0x1111ul<<(cpu))
 
-void __cpuinit platform_secondary_init(unsigned int cpu)
+static void __cpuinit tegra_secondary_init(unsigned int cpu)
 {
 	/*
 	 * if any interrupts are already enabled for the primary
@@ -61,7 +64,7 @@ void __cpuinit platform_secondary_init(unsigned int cpu)
 
 }
 
-static int tegra20_power_up_cpu(unsigned int cpu)
+static int __cpuinit tegra_boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
 	u32 reg;
 
@@ -165,7 +168,7 @@ done:
  * Initialise the CPU possible map early - this describes the CPUs
  * which may be present or become present in the system.
  */
-void __init smp_init_cpus(void)
+static void __init tegra_smp_init_cpus(void)
 {
 	unsigned int i, ncores = scu_get_core_count(scu_base);
 
@@ -181,8 +184,23 @@ void __init smp_init_cpus(void)
 	set_smp_cross_call(gic_raise_softirq);
 }
 
-void __init platform_smp_prepare_cpus(unsigned int max_cpus)
+static void __init tegra_smp_prepare_cpus(unsigned int max_cpus)
 {
 	tegra_cpu_reset_handler_init();
 	scu_enable(scu_base);
 }
+
+struct arm_soc_smp_init_ops tegra_soc_smp_init_ops __initdata = {
+	.smp_init_cpus		= tegra_smp_init_cpus,
+	.smp_prepare_cpus	= tegra_smp_prepare_cpus,
+};
+
+struct arm_soc_smp_ops tegra_soc_smp_ops __initdata = {
+	.smp_secondary_init	= tegra_secondary_init,
+	.smp_boot_secondary	= tegra_boot_secondary,
+#ifdef CONFIG_HOTPLUG_CPU
+	.cpu_kill		= tegra_cpu_kill,
+	.cpu_die		= tegra_cpu_die,
+	.cpu_disable		= tegra_cpu_disable,
+#endif
+};
