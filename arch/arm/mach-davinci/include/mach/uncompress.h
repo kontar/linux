@@ -73,6 +73,10 @@ static inline void set_uart_info(u32 phys, void * __iomem virt)
 	_DEBUG_LL_ENTRY(machine, TNETV107X_UART##port##_BASE,	\
 			TNETV107X_UART##port##_VIRT)
 
+#define DEBUG_LL_TCI6614(machine, port)				\
+	_DEBUG_LL_ENTRY(machine, TCI6614_UART##port##_BASE,	\
+			TCI6614_UART##port##_VIRT)
+
 static inline void __arch_decomp_setup(unsigned long arch_id)
 {
 	/*
