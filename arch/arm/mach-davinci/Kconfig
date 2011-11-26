@@ -6,6 +6,9 @@ config AINTC
 config CP_INTC
 	bool
 
+config CP_INTD
+	bool
+
 config ARCH_DAVINCI_DMx
 	select CPU_ARM926T
 	bool
