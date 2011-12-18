@@ -68,7 +68,17 @@ static void rproc_virtio_notify(struct virtqueue *vq)
  */
 irqreturn_t rproc_vq_interrupt(struct rproc *rproc, int vq_id)
 {
-	return vring_interrupt(0, rproc->rvdev->vq[vq_id]);
+	irqreturn_t ret = IRQ_NONE;
+	int i;
+
+	if (vq_id >= 0)
+		return vring_interrupt(0, rproc->rvdev->vq[vq_id]);
+
+	for (i = 0; i < ARRAY_SIZE(rproc->rvdev->vq); i++)
+		if (vring_interrupt(0, rproc->rvdev->vq[i]) == IRQ_HANDLED)
+			ret = IRQ_HANDLED;
+
+	return ret;
 }
 EXPORT_SYMBOL(rproc_vq_interrupt);
 
