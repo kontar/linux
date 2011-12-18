@@ -242,7 +242,7 @@ static int rproc_load_segments(struct rproc *rproc, const u8 *elf_data)
 		}
 
 		/* grab the kernel address for this device address */
-		ptr = rproc_da_to_va(rproc, da, memsz);
+		ptr = rproc->ops->da_to_va(rproc, da, memsz);
 		if (!ptr) {
 			dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, memsz);
 			ret = -EINVAL;
@@ -425,7 +425,7 @@ static int rproc_handle_trace(struct rproc *rproc, struct fw_resource *rsc)
 	char name[15];
 
 	/* what's the kernel address of this resource ? */
-	ptr = rproc_da_to_va(rproc, rsc->da, rsc->len);
+	ptr = rproc->ops->da_to_va(rproc, rsc->da, rsc->len);
 	if (!ptr) {
 		dev_err(dev, "erroneous trace resource entry\n");
 		return -EINVAL;
@@ -491,8 +491,8 @@ static int rproc_handle_devmem(struct rproc *rproc, struct fw_resource *rsc)
 	struct rproc_mem_entry *mapping;
 	int ret;
 
-	/* no point in handling this resource without a valid iommu domain */
-	if (!rproc->domain)
+	/* no point in handling this resource without iommu support */
+	if (!rproc->ops->map)
 		return -EINVAL;
 
 	mapping = kzalloc(sizeof(*mapping), GFP_KERNEL);
@@ -501,7 +501,7 @@ static int rproc_handle_devmem(struct rproc *rproc, struct fw_resource *rsc)
 		return -ENOMEM;
 	}
 
-	ret = iommu_map(rproc->domain, rsc->da, rsc->pa, rsc->len, rsc->flags);
+	ret = rproc->ops->map(rproc, rsc->da, rsc->pa, rsc->len, rsc->flags);
 	if (ret) {
 		dev_err(rproc->dev, "failed to map devmem: %d\n", ret);
 		goto out;
@@ -592,11 +592,11 @@ static int rproc_handle_carveout(struct rproc *rproc, struct fw_resource *rsc)
 	 * to use the iommu-based DMA API: we expect 'dma' to contain the
 	 * physical address in this case.
 	 */
-	if (rproc->domain) {
-		ret = iommu_map(rproc->domain, rsc->da, dma, rsc->len,
-								rsc->flags);
+	if (rproc->ops->map) {
+		ret = rproc->ops->map(rproc, rsc->da, dma, rsc->len,
+				      rsc->flags);
 		if (ret) {
-			dev_err(dev, "iommu_map failed: %d\n", ret);
+			dev_err(dev, "map failed: %d\n", ret);
 			goto dma_free;
 		}
 
@@ -802,7 +802,7 @@ static void rproc_resource_cleanup(struct rproc *rproc)
 	list_for_each_entry_safe(entry, tmp, &rproc->mappings, node) {
 		size_t unmapped;
 
-		unmapped = iommu_unmap(rproc->domain, entry->da, entry->len);
+		unmapped = rproc->ops->unmap(rproc, entry->da, entry->len);
 		if (unmapped != entry->len) {
 			/* nothing much to do besides complaining */
 			dev_err(dev, "failed to unmap %u/%u\n", entry->len,
@@ -873,9 +873,9 @@ static int rproc_fw_boot(struct rproc *rproc, const struct firmware *fw)
 	 * if enabling an IOMMU isn't relevant for this rproc, this is
 	 * just a nop
 	 */
-	ret = rproc_enable_iommu(rproc);
+	ret = rproc->ops->init(rproc);
 	if (ret) {
-		dev_err(dev, "can't enable iommu: %d\n", ret);
+		dev_err(dev, "can't enable remote processor: %d\n", ret);
 		return ret;
 	}
 
@@ -915,7 +915,7 @@ static int rproc_fw_boot(struct rproc *rproc, const struct firmware *fw)
 
 clean_up:
 	rproc_resource_cleanup(rproc);
-	rproc_disable_iommu(rproc);
+	rproc->ops->shutdown(rproc);
 	return ret;
 }
 
@@ -1078,7 +1078,7 @@ void rproc_shutdown(struct rproc *rproc)
 	/* clean up all acquired resources */
 	rproc_resource_cleanup(rproc);
 
-	rproc_disable_iommu(rproc);
+	rproc->ops->shutdown(rproc);
 
 	rproc->state = RPROC_OFFLINE;
 
