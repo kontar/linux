@@ -27,6 +27,7 @@
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 #include <linux/remoteproc.h>
+#include <linux/iommu.h>
 
 #include <plat/mailbox.h>
 #include <plat/remoteproc.h>
@@ -39,12 +40,111 @@
  * @mbox: omap mailbox handle
  * @nb: notifier block that will be invoked on inbound mailbox messages
  * @rproc: rproc handle
+ * @domain: iommu domain
  */
 struct omap_rproc {
 	struct omap_mbox *mbox;
 	struct notifier_block nb;
 	struct rproc *rproc;
+	struct iommu_domain *domain;
 };
+
+/*
+ * This is the IOMMU fault handler we register with the IOMMU API
+ * (when relevant; not all remote processors access memory through
+ * an IOMMU).
+ *
+ * IOMMU core will invoke this handler whenever the remote processor
+ * will try to access an unmapped device address.
+ *
+ * Currently this is mostly a stub, but it will be later used to trigger
+ * the recovery of the remote processor.
+ */
+static int omap_rproc_iommu_fault(struct iommu_domain *domain, struct device *dev,
+		unsigned long iova, int flags)
+{
+	dev_err(dev, "iommu fault: da 0x%lx flags 0x%x\n", iova, flags);
+
+	/*
+	 * Let the iommu core know we're not really handling this fault;
+	 * we just plan to use this as a recovery trigger.
+	 */
+	return -ENOSYS;
+}
+
+static int omap_rproc_enable_iommu(struct rproc *rproc)
+{
+	struct iommu_domain *domain;
+	struct device *dev = rproc->dev;
+	struct omap_rproc *oproc = rproc->priv;
+	int ret;
+
+	/*
+	 * We currently use iommu_present() to decide if an IOMMU
+	 * setup is needed.
+	 *
+	 * This works for simple cases, but will easily fail with
+	 * platforms that do have an IOMMU, but not for this specific
+	 * rproc.
+	 *
+	 * This will be easily solved by introducing hw capabilities
+	 * that will be set by the remoteproc driver.
+	 */
+	if (!iommu_present(dev->bus)) {
+		dev_err(dev, "iommu not found\n");
+		return -ENODEV;
+	}
+
+	domain = iommu_domain_alloc(dev->bus);
+	if (!domain) {
+		dev_err(dev, "can't alloc iommu domain\n");
+		return -ENOMEM;
+	}
+
+	iommu_set_fault_handler(domain, omap_rproc_iommu_fault);
+
+	ret = iommu_attach_device(domain, dev);
+	if (ret) {
+		dev_err(dev, "can't attach iommu device: %d\n", ret);
+		goto free_domain;
+	}
+
+	oproc->domain = domain;
+
+	return 0;
+
+free_domain:
+	iommu_domain_free(domain);
+	return ret;
+}
+
+static int omap_rproc_init_proc(struct rproc *rproc)
+{
+	int ret;
+
+	ret = omap_rproc_enable_iommu(rproc);
+	return ret;
+}
+
+static void omap_rproc_disable_iommu(struct rproc *rproc)
+{
+	struct omap_rproc *oproc = rproc->priv;
+	struct iommu_domain *domain = oproc->domain;
+	struct device *dev = rproc->dev;
+
+	if (!domain)
+		return;
+
+	iommu_detach_device(domain, dev);
+	iommu_domain_free(domain);
+
+	return;
+}
+
+static void omap_rproc_shutdown_proc(struct rproc *rproc)
+{
+	omap_rproc_disable_iommu(rproc);
+}
 
 /**
  * omap_rproc_mbox_callback() - inbound mailbox message handler
@@ -176,10 +276,72 @@ static int omap_rproc_stop(struct rproc *rproc)
 	return 0;
 }
 
+/*
+ * Some remote processors will ask us to allocate them physically contiguous
+ * memory regions (which we call "carveouts"), and map them to specific
+ * device addresses (which are hardcoded in the firmware).
+ *
+ * They may then ask us to copy objects into specific device addresses (e.g.
+ * code/data sections) or expose us certain symbols in other device address
+ * (e.g. their trace buffer).
+ *
+ * This function is an internal helper with which we can go over the allocated
+ * carveouts and translate specific device address to kernel virtual addresses
+ * so we can access the referenced memory.
+ *
+ * Note: phys_to_virt(iommu_iova_to_phys(oproc->domain, da)) will work too,
+ * but only on kernel direct mapped RAM memory. Instead, we're just using
+ * here the output of the DMA API, which should be more correct.
+ */
+static void *omap_rproc_da_to_va(struct rproc *rproc, u64 da, int len)
+{
+	struct rproc_mem_entry *carveout;
+	void *ptr = NULL;
+
+	list_for_each_entry(carveout, &rproc->carveouts, node) {
+		int offset = da - carveout->da;
+
+		/* try next carveout if da is too small */
+		if (offset < 0)
+			continue;
+
+		/* try next carveout if da is too large */
+		if (offset + len > carveout->len)
+			continue;
+
+		ptr = carveout->va + offset;
+
+		break;
+	}
+
+	return ptr;
+}
+
+static int omap_rproc_map(struct rproc *rproc, unsigned long iova,
+			  phys_addr_t paddr, size_t size, int prot)
+{
+	struct omap_rproc *oproc = rproc->priv;
+
+	return iommu_map(oproc->domain, iova, paddr, size, prot);
+}
+
+static int omap_rproc_unmap(struct rproc *rproc, unsigned long iova,
+			    size_t size)
+{
+	struct omap_rproc *oproc = rproc->priv;
+
+	return iommu_unmap(oproc->domain, iova, size);
+}
+
 static struct rproc_ops omap_rproc_ops = {
+	.init		= omap_rproc_init_proc,
+	.shutdown	= omap_rproc_shutdown_proc,
 	.start		= omap_rproc_start,
 	.stop		= omap_rproc_stop,
 	.kick		= omap_rproc_kick,
+	.map		= omap_rproc_map,
+	.unmap		= omap_rproc_unmap,
+	.da_to_va	= omap_rproc_da_to_va,
 };
 
 static int __devinit omap_rproc_probe(struct platform_device *pdev)
