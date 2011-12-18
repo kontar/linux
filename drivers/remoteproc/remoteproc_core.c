@@ -34,7 +34,6 @@
 #include <linux/string.h>
 #include <linux/debugfs.h>
 #include <linux/remoteproc.h>
-#include <linux/iommu.h>
 #include <linux/klist.h>
 #include <linux/elf.h>
 #include <linux/virtio_ids.h>
@@ -63,129 +62,6 @@ static DEFINE_KLIST(rprocs, klist_rproc_get, klist_rproc_put);
 
 typedef int (*rproc_handle_resources_t)(struct rproc *rproc,
 				struct fw_resource *rsc, int len);
-
-/*
- * This is the IOMMU fault handler we register with the IOMMU API
- * (when relevant; not all remote processors access memory through
- * an IOMMU).
- *
- * IOMMU core will invoke this handler whenever the remote processor
- * will try to access an unmapped device address.
- *
- * Currently this is mostly a stub, but it will be later used to trigger
- * the recovery of the remote processor.
- */
-static int rproc_iommu_fault(struct iommu_domain *domain, struct device *dev,
-		unsigned long iova, int flags)
-{
-	dev_err(dev, "iommu fault: da 0x%lx flags 0x%x\n", iova, flags);
-
-	/*
-	 * Let the iommu core know we're not really handling this fault;
-	 * we just plan to use this as a recovery trigger.
-	 */
-	return -ENOSYS;
-}
-
-static int rproc_enable_iommu(struct rproc *rproc)
-{
-	struct iommu_domain *domain;
-	struct device *dev = rproc->dev;
-	int ret;
-
-	/*
-	 * We currently use iommu_present() to decide if an IOMMU
-	 * setup is needed.
-	 *
-	 * This works for simple cases, but will easily fail with
-	 * platforms that do have an IOMMU, but not for this specific
-	 * rproc.
-	 *
-	 * This will be easily solved by introducing hw capabilities
-	 * that will be set by the remoteproc driver.
-	 */
-	if (!iommu_present(dev->bus)) {
-		dev_err(dev, "iommu not found\n");
-		return -ENODEV;
-	}
-
-	domain = iommu_domain_alloc(dev->bus);
-	if (!domain) {
-		dev_err(dev, "can't alloc iommu domain\n");
-		return -ENOMEM;
-	}
-
-	iommu_set_fault_handler(domain, rproc_iommu_fault);
-
-	ret = iommu_attach_device(domain, dev);
-	if (ret) {
-		dev_err(dev, "can't attach iommu device: %d\n", ret);
-		goto free_domain;
-	}
-
-	rproc->domain = domain;
-
-	return 0;
-
-free_domain:
-	iommu_domain_free(domain);
-	return ret;
-}
-
-static void rproc_disable_iommu(struct rproc *rproc)
-{
-	struct iommu_domain *domain = rproc->domain;
-	struct device *dev = rproc->dev;
-
-	if (!domain)
-		return;
-
-	iommu_detach_device(domain, dev);
-	iommu_domain_free(domain);
-
-	return;
-}
-
-/*
- * Some remote processors will ask us to allocate them physically contiguous
- * memory regions (which we call "carveouts"), and map them to specific
- * device addresses (which are hardcoded in the firmware).
- *
- * They may then ask us to copy objects into specific device addresses (e.g.
- * code/data sections) or expose us certain symbols in other device address
- * (e.g. their trace buffer).
- *
- * This function is an internal helper with which we can go over the allocated
- * carveouts and translate specific device address to kernel virtual addresses
- * so we can access the referenced memory.
- *
- * Note: phys_to_virt(iommu_iova_to_phys(rproc->domain, da)) will work too,
- * but only on kernel direct mapped RAM memory. Instead, we're just using
- * here the output of the DMA API, which should be more correct.
- */
-static void *rproc_da_to_va(struct rproc *rproc, u64 da, int len)
-{
-	struct rproc_mem_entry *carveout;
-	void *ptr = NULL;
-
-	list_for_each_entry(carveout, &rproc->carveouts, node) {
-		int offset = da - carveout->da;
-
-		/* try next carveout if da is too small */
-		if (offset < 0)
-			continue;
-
-		/* try next carveout if da is too large */
-		if (offset + len > carveout->len)
-			continue;
-
-		ptr = carveout->va + offset;
-
-		break;
-	}
-
-	return ptr;
-}
 
 /**
  * rproc_load_segments() - load firmware segments to memory

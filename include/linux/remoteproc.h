@@ -196,7 +196,6 @@ enum rproc_state {
 /**
  * struct rproc - represents a physical remote processor device
  * @node: klist node of this rproc object
- * @domain: iommu domain
  * @name: human readable name of the rproc
  * @firmware: name of firmware file to be loaded
  * @priv: private data which belongs to the platform-specific rproc module
@@ -217,7 +216,6 @@ enum rproc_state {
  */
 struct rproc {
 	struct klist_node node;
-	struct iommu_domain *domain;
 	const char *name;
 	const char *firmware;
 	void *priv;
