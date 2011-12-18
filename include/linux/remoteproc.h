@@ -147,14 +147,27 @@ struct rproc;
 
 /**
  * struct rproc_ops - platform-specific device handlers
+ * @init:	do platform specific pre power up initialization
+ * @shutdown:	do platform specific shutdown post power down
  * @start:	power on the device and boot it
  * @stop:	power off the device
  * @kick:	kick a virtqueue (virtqueue id given as a parameter)
+ * @map:	map device address to virtual address using platform
+ *		specific iommu
+ * @unmap:	unmap device address using platform specific iommu
+ * @da_to_va:	convert from device address to virtual address using
+ *		previously created mappings
  */
 struct rproc_ops {
+	int (*init)(struct rproc *rproc);
+	void (*shutdown)(struct rproc *rproc);
 	int (*start)(struct rproc *rproc);
 	int (*stop)(struct rproc *rproc);
 	void (*kick)(struct rproc *rproc, int vqid);
+	int (*map)(struct rproc *rproc, unsigned long iova, phys_addr_t paddr,
+		   size_t size, int prot);
+	int (*unmap)(struct rproc *rproc, unsigned long iova, size_t size);
+	void *(*da_to_va)(struct rproc *rproc, u64 da, int len);
 };
 
 /**
