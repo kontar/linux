@@ -8,6 +8,18 @@ config HWSPINLOCK
 
 menu "Hardware Spinlock drivers"
 
+config HWSPINLOCK_KEYSTONE
+	tristate "Keystone Hardware Spinlock device"
+	depends on TI_KEYSTONE
+	default y if TI_KEYSTONE
+	select HWSPINLOCK
+	help
+	  Say y here to support the Hardware Spinlock device included on TI
+	  Keystone devices.  This driver provides basic direct mode
+	  functionality via polled reads/writes to the hardware block.
+
+	  If unsure, say N.
+
 config HWSPINLOCK_OMAP
 	tristate "OMAP Hardware Spinlock device"
 	depends on ARCH_OMAP4
