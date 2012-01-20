@@ -26,11 +26,27 @@ struct rproc;
 
 /* from remoteproc_core.c */
 void rproc_release(struct kref *kref);
-irqreturn_t rproc_vq_interrupt(struct rproc *rproc, int vq_id);
 
+#ifdef CONFIG_RPMSG
 /* from remoteproc_rpmsg.c */
-int rproc_add_rpmsg_vdev(struct rproc *);
-void rproc_remove_rpmsg_vdev(struct rproc *rproc);
+int rproc_add_rpmsg_vdev(struct rproc *rp);
+void rproc_remove_rpmsg_vdev(struct rproc *rp);
+irqreturn_t rproc_vq_interrupt(struct rproc *rp, int vqid);
+#else
+static inline int rproc_add_rpmsg_vdev(struct rproc *rp)
+{
+	return 0;
+}
+
+static inline void rproc_remove_rpmsg_vdev(struct rproc *rp)
+{
+}
+
+static inline irqreturn_t rproc_vq_interrupt(struct rproc *rp, int vqid)
+{
+	return IRQ_NONE;
+}
+#endif
 
 /* from remoteproc_debugfs.c */
 void rproc_remove_trace_file(struct dentry *tfile);
