@@ -24,4 +24,4 @@ struct arm_soc_smp_ops;
 extern struct arm_soc_smp_init_ops	vexpress_soc_smp_init_ops;
 extern struct arm_soc_smp_ops		vexpress_soc_smp_ops;
 
-extern void vexpress_cpu_lowpower(unsigned int cpu, int *spurious)
+extern void vexpress_cpu_lowpower(unsigned int cpu, int *spurious);
