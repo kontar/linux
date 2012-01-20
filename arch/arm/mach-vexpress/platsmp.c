@@ -61,7 +61,7 @@ struct arm_soc_smp_ops vexpress_soc_smp_ops __initdata = {
 	.smp_boot_secondary	= versatile_boot_secondary,
 #ifdef CONFIG_HOTPLUG_CPU
 	.cpu_kill		= dummy_cpu_kill,
-	.cpu_die		= vexpress_cpu_die,
+	.cpu_lowpower		= vexpress_cpu_lowpower,
 	.cpu_disable		= dummy_cpu_disable,
 #endif
 };

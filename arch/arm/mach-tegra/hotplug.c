@@ -52,61 +52,22 @@ static inline void cpu_leave_lowpower(void)
 	  : "cc");
 }
 
-static inline void platform_do_lowpower(unsigned int cpu, int *spurious)
+void tegra_cpu_lowpower(unsigned int cpu, int *spurious)
 {
 	/*
 	 * there is no power-control hardware on this platform, so all
 	 * we can do is put the core into WFI; this is safe as the calling
 	 * code will have already disabled interrupts
 	 */
-	for (;;) {
-		/*
-		 * here's the WFI
-		 */
-		asm(".word	0xe320f003\n"
-		    :
-		    :
-		    : "memory", "cc");
-
-		/*if (pen_release == cpu) {*/
-			/*
-			 * OK, proper wakeup, we're done
-			 */
-			break;
-		/*}*/
-
-		/*
-		 * Getting here, means that we have come out of WFI without
-		 * having been woken up - this shouldn't happen
-		 *
-		 * Just note it happening - when we're woken, we can report
-		 * its occurrence.
-		 */
-		(*spurious)++;
-	}
-}
-
-/*
- * platform-specific code to shutdown a CPU
- *
- * Called with IRQs disabled
- */
-void tegra_cpu_die(unsigned int cpu)
-{
-	int spurious = 0;
-
-	/*
-	 * we're ready for shutdown now, so do it
-	 */
 	cpu_enter_lowpower();
-	platform_do_lowpower(cpu, &spurious);
 
 	/*
-	 * bring this CPU back into the world of cache
-	 * coherency, and then restore interrupts
+	 * here's the WFI
 	 */
-	cpu_leave_lowpower();
+	asm("wfi\n"
+	    :
+	    :
+	    : "memory", "cc");
 
-	if (spurious)
-		pr_warn("CPU%u: %u spurious wakeup calls\n", cpu, spurious);
+	cpu_leave_lowpower();
 }

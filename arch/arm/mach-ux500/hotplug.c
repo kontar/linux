@@ -19,7 +19,7 @@
 
 extern volatile int pen_release;
 
-static inline void platform_do_lowpower(unsigned int cpu)
+void ux500_cpu_lowpower(unsigned int cpu, int *spurious)
 {
 	flush_cache_all();
 
@@ -33,16 +33,6 @@ static inline void platform_do_lowpower(unsigned int cpu)
 			 */
 			break;
 		}
+		(*spurious)++;
 	}
-}
-
-/*
- * platform-specific code to shutdown a CPU
- *
- * Called with IRQs disabled
- */
-void ux500_cpu_die(unsigned int cpu)
-{
-	/* directly enter low power state, skipping secure registers */
-	platform_do_lowpower(cpu);
 }

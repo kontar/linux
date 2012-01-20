@@ -208,7 +208,7 @@ struct arm_soc_smp_ops exynos4_soc_smp_ops __initdata = {
 	.smp_boot_secondary	= exynos4_boot_secondary,
 #ifdef CONFIG_HOTPLUG_CPU
 	.cpu_kill		= dummy_cpu_kill,
-	.cpu_die		= exynos4_cpu_die,
+	.cpu_lowpower		= exynos4_cpu_lowpower,
 	.cpu_disable		= dummy_cpu_disable,
 #endif
 };

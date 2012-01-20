@@ -38,6 +38,7 @@ struct arm_soc_smp_ops {
 #ifdef CONFIG_HOTPLUG_CPU
 	int  (*cpu_kill)(unsigned int cpu);
 	void (*cpu_die)(unsigned int cpu);
+	void (*cpu_lowpower)(unsigned int cpu, int *spurious);
 	int  (*cpu_disable)(unsigned int cpu);
 #endif
 };

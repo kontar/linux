@@ -184,7 +184,7 @@ struct arm_soc_smp_ops msm_soc_smp_ops __initdata = {
 	.smp_boot_secondary	= msm_boot_secondary,
 #ifdef CONFIG_HOTPLUG_CPU
 	.cpu_kill		= dummy_cpu_kill,
-	.cpu_die		= msm_cpu_die,
+	.cpu_lowpower		= msm_cpu_lowpower,
 	.cpu_disable		= dummy_cpu_disable,
 #endif
 };

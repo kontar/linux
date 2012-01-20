@@ -202,8 +202,20 @@ static int __cpuinit platform_cpu_kill(unsigned int cpu)
 
 static void __cpuinit platform_cpu_die(unsigned int cpu)
 {
-	if (soc_smp_ops && soc_smp_ops->cpu_die)
-		soc_smp_ops->cpu_die(cpu);
+	if (soc_smp_ops) {
+		if (soc_smp_ops->cpu_die) {
+			soc_smp_ops->cpu_die(cpu);
+			return;
+		}
+
+		if (soc_smp_ops->cpu_lowpower) {
+			int spurious = 0;
+			soc_smp_ops->cpu_lowpower(cpu, &spurious);
+			if (spurious)
+				pr_warn("CPU%u: %u spurious wakeup calls\n",
+					cpu, spurious);
+		}
+	}
 }
 
 static int __cpuinit platform_cpu_disable(unsigned int cpu)
