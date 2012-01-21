@@ -48,6 +48,7 @@ static inline irqreturn_t rproc_vq_interrupt(struct rproc *rp, int vqid)
 }
 #endif
 
+#ifdef CONFIG_DEBUG_FS
 /* from remoteproc_debugfs.c */
 void rproc_remove_trace_file(struct dentry *tfile);
 struct dentry *rproc_create_trace_file(const char *name, struct rproc *rproc,
@@ -56,5 +57,34 @@ void rproc_delete_debug_dir(struct rproc *rproc);
 void rproc_create_debug_dir(struct rproc *rproc);
 void rproc_init_debugfs(void);
 void rproc_exit_debugfs(void);
+#else
+static inline void rproc_remove_trace_file(struct dentry *tfile)
+{
+}
+
+static inline struct dentry *
+rproc_create_trace_file(const char *name, struct rproc *rproc,
+			struct rproc_mem_entry *trace)
+{
+	return NULL;
+}
+
+static inline void rproc_delete_debug_dir(struct rproc *rproc)
+{
+}
+
+static inline void rproc_create_debug_dir(struct rproc *rproc)
+{
+}
+
+static inline void rproc_init_debugfs(void)
+{
+}
+
+static inline void rproc_exit_debugfs(void)
+{
+}
+
+#endif
 
 #endif /* REMOTEPROC_INTERNAL_H */
