@@ -233,6 +233,7 @@ struct rproc {
 	struct completion firmware_loading_complete;
 	u64 bootaddr;
 	struct rproc_vdev *rvdev;
+	struct device_attribute attr_state;
 };
 
 /**

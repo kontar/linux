@@ -1016,6 +1016,9 @@ void rproc_release(struct kref *kref)
 
 	rproc_delete_debug_dir(rproc);
 
+	/* remove sysfs entries */
+	rproc_remove_sysfs(rproc);
+
 	/* at this point no one holds a reference to rproc anymore */
 	kfree(rproc);
 }
@@ -1154,6 +1157,9 @@ int rproc_register(struct rproc *rproc)
 
 	/* create debugfs entries */
 	rproc_create_debug_dir(rproc);
+
+	/* create sysfs entries */
+	rproc_create_sysfs(rproc);
 
 	/* rproc_unregister() calls must wait until async loader completes */
 	init_completion(&rproc->firmware_loading_complete);

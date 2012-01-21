@@ -88,4 +88,12 @@ static inline void rproc_exit_debugfs(void)
 
 #endif
 
+#ifdef CONFIG_SYSFS
+void rproc_create_sysfs(struct rproc *rproc);
+void rproc_remove_sysfs(struct rproc *rproc);
+#else
+static inline void rproc_create_sysfs(struct rproc *rp) { }
+static inline void rproc_remove_sysfs(struct rproc *rp) { }
+#endif
+
 #endif /* REMOTEPROC_INTERNAL_H */
