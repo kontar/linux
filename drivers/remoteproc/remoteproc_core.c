@@ -831,6 +831,32 @@ out:
 	complete_all(&rproc->firmware_loading_complete);
 }
 
+/*
+ * A state-to-string lookup table, for exposing a human readable state
+ * via debugfs. Always keep in sync with enum rproc_state
+ */
+static const char * const rproc_state_string[] = {
+	"offline",
+	"suspended",
+	"running",
+	"crashed",
+	"invalid",
+};
+
+/**
+ * rproc_get_state_string() - get the remote processor state
+ * @state: remote processor's state
+ *
+ * Returns a string that indicates the remote processor's current state.
+ */
+const char *rproc_get_state_string(int state)
+{
+	if (state < RPROC_OFFLINE || state >= RPROC_LAST)
+		state = RPROC_LAST;
+
+	return rproc_state_string[state];
+}
+
 /**
  * rproc_boot() - boot a remote processor
  * @rproc: handle of a remote processor

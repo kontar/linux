@@ -29,6 +29,8 @@
 #include <linux/remoteproc.h>
 #include <linux/device.h>
 
+#include "remoteproc_internal.h"
+
 /* remoteproc debugfs parent dir */
 static struct dentry *rproc_dbg;
 
@@ -63,31 +65,17 @@ static const struct file_operations trace_rproc_ops = {
 	.llseek	= generic_file_llseek,
 };
 
-/*
- * A state-to-string lookup table, for exposing a human readable state
- * via debugfs. Always keep in sync with enum rproc_state
- */
-static const char * const rproc_state_string[] = {
-	"offline",
-	"suspended",
-	"running",
-	"crashed",
-	"invalid",
-};
-
 /* expose the state of the remote processor via debugfs */
 static ssize_t rproc_state_read(struct file *filp, char __user *userbuf,
 						size_t count, loff_t *ppos)
 {
 	struct rproc *rproc = filp->private_data;
-	unsigned int state;
 	char buf[30];
 	int i;
 
-	state = rproc->state > RPROC_LAST ? RPROC_LAST : rproc->state;
-
-	i = snprintf(buf, 30, "%.28s (%d)\n", rproc_state_string[state],
-							rproc->state);
+	i = snprintf(buf, 30, "%.28s (%d)\n",
+		     rproc_get_state_string(rproc->state),
+		     rproc->state);
 
 	return simple_read_from_buffer(userbuf, count, ppos, buf, i);
 }

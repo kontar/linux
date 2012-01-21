@@ -26,6 +26,7 @@ struct rproc;
 
 /* from remoteproc_core.c */
 void rproc_release(struct kref *kref);
+const char *rproc_get_state_string(int state);
 
 #ifdef CONFIG_RPMSG
 /* from remoteproc_rpmsg.c */
