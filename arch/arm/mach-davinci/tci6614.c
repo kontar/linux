@@ -252,7 +252,7 @@ static struct clk_lookup clks[] = {
 	CLK(NULL,		"clk_tetb_trc",		&clk_tetb_trc),
 	CLK("keystone_netcp.0", "clk_pktproc",		&clk_pktproc),
 	CLK("keystone_netcp.0", "clk_cpgmac",		&clk_cpgmac),
-	CLK(NULL,		"clk_crypto",		&clk_crypto),
+	CLK("20c0000.crypto",	NULL,			&clk_crypto),
 	CLK(NULL,		"clk_pciex",		&clk_pciex),
 	CLK(NULL,		"clk_srio",		&clk_srio),
 	CLK(NULL,		"clk_bcp",		&clk_bcp),
