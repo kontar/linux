@@ -94,5 +94,49 @@
 			compatible = "ti,keystone-crypto";
 			reg = <0x20c0000 0x40000>;
 		};
+
+		rproc0: rproc@108ffffc {
+			compatible = "ti,keystone-rproc";
+			reg = <0x108ffffc 4				/* boot address */
+			       0x02620240 4>;				/* ipc interrupt register */
+			addr-map = <0x10800000 0x00800000 0x100000	/* l2-ram  global, local, size */
+				    0x0c000000 0x0c000000 0x200000	/* msmc-sram  global, local, size */
+				    0xa0000000 0xa0000000 0x20000000>;	/* ddr3-sram  global, local, size */
+			core = "dsp-core0";
+			firmware = "dsp-core0.out";
+		};
+
+		rproc1: rproc@118ffffc {
+			compatible = "ti,keystone-rproc";
+			reg = <0x118ffffc 4
+			       0x02620244 4>;
+			addr-map = <0x11800000 0x00800000 0x100000
+				    0x0c000000 0x0c000000 0x200000
+				    0xa0000000 0xa0000000 0x20000000>;
+			core = "dsp-core1";
+			firmware = "dsp-core1.out";
+		};
+
+		rproc2: rproc@128ffffc {
+			compatible = "ti,keystone-rproc";
+			reg = <0x128ffffc 4
+			       0x02620248 4>;
+			addr-map = <0x12800000 0x00800000 0x100000
+				    0x0c000000 0x0c000000 0x200000
+				    0xa0000000 0xa0000000 0x20000000>;
+			core = "dsp-core2";
+			firmware = "dsp-core2.out";
+		};
+
+		rproc3: rproc@138ffffc {
+			compatible = "ti,keystone-rproc";
+			reg = <0x138ffffc 4
+			       0x0262024c 4>;
+			addr-map = <0x13800000 0x00800000 0x100000
+				    0x0c000000 0x0c000000 0x200000
+				    0xa0000000 0xa0000000 0x20000000>;
+			core = "dsp-core3";
+			firmware = "dsp-core3.out";
+		};
 	};
 };
