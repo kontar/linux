@@ -20,6 +20,8 @@
 
 #include <mach/regs-pmu.h>
 
+#include "common.h"
+
 extern volatile int pen_release;
 
 static inline void cpu_enter_lowpower(void)
@@ -60,8 +62,9 @@ static inline void cpu_leave_lowpower(void)
 	  : "cc");
 }
 
-static inline void platform_do_lowpower(unsigned int cpu, int *spurious)
+void exynos4_cpu_lowpower(unsigned int cpu, int *spurious)
 {
+	cpu_enter_lowpower();
 	for (;;) {
 
 		/* make cpu1 to be turned off at next WFI command */
@@ -92,43 +95,5 @@ static inline void platform_do_lowpower(unsigned int cpu, int *spurious)
 		 */
 		(*spurious)++;
 	}
-}
-
-int platform_cpu_kill(unsigned int cpu)
-{
-	return 1;
-}
-
-/*
- * platform-specific code to shutdown a CPU
- *
- * Called with IRQs disabled
- */
-void platform_cpu_die(unsigned int cpu)
-{
-	int spurious = 0;
-
-	/*
-	 * we're ready for shutdown now, so do it
-	 */
-	cpu_enter_lowpower();
-	platform_do_lowpower(cpu, &spurious);
-
-	/*
-	 * bring this CPU back into the world of cache
-	 * coherency, and then restore interrupts
-	 */
 	cpu_leave_lowpower();
-
-	if (spurious)
-		pr_warn("CPU%u: %u spurious wakeup calls\n", cpu, spurious);
-}
-
-int platform_cpu_disable(unsigned int cpu)
-{
-	/*
-	 * we don't allow CPU 0 to be shutdown (it is still too special
-	 * e.g. clock tick interrupts)
-	 */
-	return cpu == 0 ? -EPERM : 0;
 }
