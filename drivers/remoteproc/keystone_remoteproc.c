@@ -56,33 +56,6 @@ struct keystone_rproc {
 	struct local_addr_map addr_map_table[ADDR_MAP_TABLE_LENGTH];
 };
 
-static int keystone_create_carveout(struct rproc *rproc, int index)
-{
-	struct rproc_mem_entry *carveout;
-	struct keystone_rproc *kproc = rproc->priv;
-
-	carveout = devm_kzalloc(rproc->dev, sizeof(struct rproc_mem_entry),
-			GFP_KERNEL);
-	if (!carveout) {
-		dev_err(rproc->dev, "devm_kzalloc carveout failed\n");
-		return -ENOMEM;
-	}
-
-	carveout->da = kproc->addr_map_table[index].global_addr;
-	carveout->len = kproc->addr_map_table[index].length;
-	carveout->va = devm_ioremap_nocache(rproc->dev, carveout->da,
-			carveout->len);
-	if (!carveout->va) {
-		dev_err(rproc->dev, "failed to ioremap 0x%x\n",
-				(int) carveout->va);
-		return -EBUSY;
-	}
-
-	list_add_tail(&carveout->node, &rproc->carveouts);
-
-	return 0;
-}
-
 /* Send an IPC interrupt to the remote DSP core */
 static void keystone_rproc_kick(struct rproc *rproc, int vqid)
 {
@@ -91,46 +64,89 @@ static void keystone_rproc_kick(struct rproc *rproc, int vqid)
 	__raw_writel(1, kproc->ipc_int_gen);
 }
 
-/*
- * In Keystone the carveout stores the virtual to phycical mappings for the
- * DSP memory sections. The DSP memory sections needs to lie in this sections
- * for kernel to copy.
- */
-static void *keystone_rproc_da_to_va(struct rproc *rproc, u64 da, int len)
+static inline u64 keystone_rproc_get_global_addr(struct rproc *rproc, u64 da,
+						 int length)
 {
-	struct keystone_rproc *kproc = (struct keystone_rproc *) rproc->priv;
-	struct rproc_mem_entry *carveout;
-	void *ptr = NULL;
-	int offset, i;
+	struct keystone_rproc *kproc = rproc->priv;
 	struct local_addr_map *addr_map = &kproc->addr_map_table[0];
+	int offset, i;
 
 	for (i = 0; i < ADDR_MAP_TABLE_LENGTH; i++) {
 		if (addr_map->local_addr <= da &&
 		    addr_map->local_addr + addr_map->length > da) {
 			offset = da - addr_map->local_addr;
-			da = addr_map->global_addr + offset;
-			break;
+			if (offset + length > addr_map->length)
+				return 0;
+			return (addr_map->global_addr + offset);
 		}
 		addr_map++;
 	}
+	return 0;
+}
 
-	list_for_each_entry(carveout, &rproc->carveouts, node) {
-		offset = da - carveout->da;
+static int keystone_rproc_load_seg(struct rproc *rproc, const u8 *elf_data)
+{
+	struct device *dev = rproc->dev;
+	struct elf32_hdr *ehdr;
+	struct elf32_phdr *phdr;
+	int i, ret = 0;
+	void *va;
 
-		/* Check if da is in the memory range */
-		if (carveout->da > da || carveout->da + carveout->len < da)
+	ehdr = (struct elf32_hdr *)elf_data;
+	phdr = (struct elf32_phdr *)(elf_data + ehdr->e_phoff);
+
+	/* go through the available ELF segments */
+	for (i = 0; i < ehdr->e_phnum; i++, phdr++) {
+		u32 filesz = phdr->p_filesz;
+		u32 memsz = phdr->p_memsz;
+		u32 da = phdr->p_paddr;
+		u32 gda;
+
+		if (phdr->p_type != PT_LOAD)
 			continue;
 
-		/* Check if the section length fits to the carveout segment */
-		if (da + len > carveout->da + carveout->len)
+		dev_dbg(dev, "phdr: type %d da 0x%x memsz 0x%x filesz 0x%x\n",
+			phdr->p_type, da, memsz, filesz);
+
+		if (filesz > memsz) {
+			dev_err(dev, "bad phdr filesz 0x%x memsz 0x%x\n",
+				filesz, memsz);
+			ret = -EINVAL;
 			break;
+		}
 
-		ptr = carveout->va + offset;
+		gda = keystone_rproc_get_global_addr(rproc, da, memsz);
+		if (!gda) {
+			dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, memsz);
+			ret = -EINVAL;
+			break;
+		}
 
-		break;
+		va = devm_ioremap_nocache(rproc->dev, gda, memsz);
+		if (!va) {
+			dev_err(rproc->dev, "failed to ioremap: %d\n",
+				(int) va);
+			return -EBUSY;
+		}
+
+		/* put the segment where the remote processor expects it */
+		if (phdr->p_filesz)
+			memcpy(va, elf_data + phdr->p_offset, filesz);
+
+		/*
+		 * Zero out remaining memory for this segment.
+		 *
+		 * This isn't strictly required since dma_alloc_coherent already
+		 * did this for us. albeit harmless, we may consider removing
+		 * this.
+		 */
+		if (memsz > filesz)
+			memset(va + filesz, 0, memsz - filesz);
+
+		devm_iounmap(rproc->dev, va);
 	}
 
-	return ptr;
+	return ret;
 }
 
 /*
@@ -167,32 +183,12 @@ static int keystone_rproc_stop(struct rproc *rproc)
 
 static int keystone_rproc_init_proc(struct rproc *rproc)
 {
-	int ret;
-
-	ret = keystone_create_carveout(rproc, L2_RAM_ADDR_MAP_INDEX);
-
-	if (ret < 0)
-		return ret;
-
-	ret = keystone_create_carveout(rproc, MSMC_ADDR_MAP_INDEX);
-	if (ret < 0)
-		return ret;
-
-	ret = keystone_create_carveout(rproc, DDR3_ADDR_MAP_INDEX);
-	if (ret < 0)
-		return ret;
-
 	return 0;
 }
 
 static void keystone_rproc_shutdown_proc(struct rproc *rproc)
 {
-	struct rproc_mem_entry *carveout, *tmp;
-	list_for_each_entry_safe(carveout, tmp, &rproc->carveouts, node) {
-		if (carveout->va)
-			iounmap(carveout->va);
-		devm_kfree(rproc->dev, carveout);
-	}
+
 }
 
 static struct rproc_ops keystone_rproc_ops = {
@@ -201,7 +197,7 @@ static struct rproc_ops keystone_rproc_ops = {
 	.start		= keystone_rproc_start,
 	.stop		= keystone_rproc_stop,
 	.kick		= keystone_rproc_kick,
-	.da_to_va	= keystone_rproc_da_to_va,
+	.load_seg	= keystone_rproc_load_seg,
 };
 
 static int __devinit keystone_rproc_probe(struct platform_device *pdev)
@@ -225,7 +221,7 @@ static int __devinit keystone_rproc_probe(struct platform_device *pdev)
 	}
 
 	rproc = rproc_alloc(&pdev->dev, core, &keystone_rproc_ops,
-		pfirmware, sizeof(*kproc));
+			    pfirmware, sizeof(*kproc));
 	if (!rproc) {
 		dev_err(&pdev->dev, "rpoc_alloc failure\n");
 		return -ENOMEM;
@@ -235,7 +231,7 @@ static int __devinit keystone_rproc_probe(struct platform_device *pdev)
 	kproc->rproc = rproc;
 
 	if (of_property_read_u32_array(np, "addr_map",
-	    (u32 *)kproc->addr_map_table, 9)) {
+				       (u32 *)kproc->addr_map_table, 9)) {
 		dev_err(&pdev->dev, "No addr_map array  in dt bindings\n");
 		return -ENODEV;
 	}

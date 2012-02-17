@@ -157,6 +157,7 @@ struct rproc;
  * @unmap:	unmap device address using platform specific iommu
  * @da_to_va:	convert from device address to virtual address using
  *		previously created mappings
+ * @load_seg:	load remote processor's ELF segments to memory
  */
 struct rproc_ops {
 	int (*init)(struct rproc *rproc);
@@ -168,6 +169,7 @@ struct rproc_ops {
 		   size_t size, int prot);
 	int (*unmap)(struct rproc *rproc, unsigned long iova, size_t size);
 	void *(*da_to_va)(struct rproc *rproc, u64 da, int len);
+	int (*load_seg)(struct rproc *rproc, const u8 *elf_data);
 };
 
 /**
