@@ -44,8 +44,19 @@
 				general {
 					values = <4000 16>;
 				};
+				pacmd {
+					values = <640 1>;
+					reserved;
+				};
+				patx {
+					values = <645 1>;
+					reserved;
+				};
 			};
 			descriptors {
+				pool-net {
+					values = <512 128>;	/* num_desc desc_size */
+				};
 			};
 			pdsps {
 				#address-cells = <1>;
@@ -87,7 +98,69 @@
 			enable-all;
 			/* debug; */
 			channels {
+				nettx {
+					transmit;
+					label		= "nettx";
+					pool		= "pool-net";
+					descriptors	= <128>;
+					submit-queue	= <645>;
+					/* complete-queue = <xx>; */
+					/* debug; */
+					/* channel = <0>; */
+					/* priority = <1>; */
+				};
+				netrx {
+					receive;
+					label		= "netrx";
+					pool		= "pool-net";
+					descriptors	= <128>;
+					/* submit-queue   = <xx>; */
+					complete-queue = <657>;
+					/* debug; */
+					/* channel = <0>; */
+					flow		= <30>;
+				};
+				patx {
+					transmit;
+					label		= "patx";
+					pool		= "pool-net";
+					descriptors	= <8>;
+					submit-queue	= <640>;
+					/* complete-queue = <xx>; */
+					/* debug; */
+					/* channel = <xx>; */
+					/* priority = <1>; */
+					queues		= <640 4013>;
+				};
+				parx {
+					receive;
+					label		= "parx";
+					pool		= "pool-net";
+					descriptors	= <4>;
+					/* submit-queue   = <xx>; */
+					/* complete-queue = <xx>; */
+					/* debug; */
+					/* channel = <0>; */
+					flow		= <31>;
+				};
 			};
+		};
+
+		mdio: mdio@2090300 {
+			compatible	= "ti,davinci_mdio";
+			reg		= <0x2090300 0x100>;
+		};
+
+		netcp: netcp@2090000 {
+			reg = <0x2090000 0xf00>;
+			compatible = "ti,keystone-netcp";
+
+			tx_channel = "nettx";
+			rx_channel = "netrx";
+			pa: pa@2000000 {
+				label = "keystone-pa";
+			};
+
 		};
 
 		crypto: crypto@20c0000 {

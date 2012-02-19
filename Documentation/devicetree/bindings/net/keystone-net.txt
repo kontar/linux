@@ -1,0 +1,23 @@
+This document describes the device tree bindings associated with the
+keystone network driver support.
+
+tx_channel: the packet dma channel name associated with tx
+rx_channel: the packet dma channel name associated with rx
+reg:        the regsiter start address and the szie that will be
+            used by the driver.
+
+Below we provide 2 examples.
+
+veth: veth@2a6c000 {
+	compatible = "ti,keystone-veth";
+	tx_channel = "vethtx";
+	rx_channel = "vethrx";
+};
+
+netcp: netcp@2090000 {
+	reg = <0x2090000 0xf00>;
+	compatible = "ti,keystone-netcp";
+	tx_channel = "nettx";
+	rx_channel = "netrx";
+};
+
