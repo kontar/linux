@@ -9,11 +9,35 @@
  * published by the Free Software Foundation.
  */
 
-		.macro	addruart,rp,rv,tmp
-		movw	\rv, #0x6000
-		movt	\rv, #0xfee3
-		movw	\rp, #0x6000
-		movt	\rp, #0xfff3
-		.endm
+#include <linux/serial_reg.h>
 
-#include <asm/hardware/debug-pl01x.S>
+#define UART_SHIFT	2
+
+
+	.macro	addruart,rp,rv,tmp
+	movw	\rv, #0x0c00
+	movt	\rv, #0xfed3
+	movw	\rp, #0x0c00
+	movt	\rp, #0x0253
+	.endm
+
+
+	.macro	senduart,rd,rx
+	str	\rd, [\rx, #UART_TX << UART_SHIFT]
+	.endm
+
+	.macro	busyuart,rd,rx
+1002:	ldr	\rd, [\rx, #UART_LSR << UART_SHIFT]
+	and	\rd, \rd, #UART_LSR_TEMT | UART_LSR_THRE
+	teq	\rd, #UART_LSR_TEMT | UART_LSR_THRE
+	bne	1002b
+	.endm
+
+	.macro	waituart,rd,rx
+#ifdef FLOW_CONTROL
+1001:	ldr	\rd, [\rx, #UART_MSR << UART_SHIFT]
+	tst	\rd, #UART_MSR_CTS
+	beq	1001b
+#endif
+	.endm
+

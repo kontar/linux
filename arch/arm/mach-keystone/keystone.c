@@ -38,8 +38,21 @@
 
 #include "core.h"
 
+int tmr16_timer_sched_clock_init(void);
+int tmr16_timer_register(void);
+
+static struct map_desc io_desc[] = {
+       {
+               .virtual        = 0xfe800000UL,
+               .pfn            = __phys_to_pfn(0x02000000UL),
+               .length         = 0x800000UL,
+               .type           = MT_DEVICE
+       },
+};
+
 static void __init keystone_map_io(void)
 {
+       iotable_init(io_desc, sizeof(io_desc)/sizeof(struct map_desc));
 }
 
 void keystone_set_cpu_jump(int cpu, void *jump_addr)
@@ -57,15 +70,19 @@ static void __init keystone_init_irq(void)
 	of_irq_init(irq_match);
 }
 
+
 static void __init keystone_timer_init(void)
 {
-	BUG_ON(arch_timer_of_register() ||
-	       arch_timer_sched_clock_init());
+//	arch_timer_of_register();
+//	arch_timer_sched_clock_init();
+	tmr16_timer_register();
+	tmr16_timer_sched_clock_init();
 }
 
 static struct sys_timer keystone_timer = {
 	.init = keystone_timer_init,
 };
+
 
 static void __init keystone_init(void)
 {
@@ -73,7 +90,7 @@ static void __init keystone_init(void)
 }
 
 static const char *keystone_match[] __initconst = {
-	"ti,keystone",
+	"ti,keystone-evm",
 	NULL,
 };
 
@@ -81,6 +98,7 @@ DT_MACHINE_START(KEYSTONE, "Keystone")
 	.map_io		= keystone_map_io,
 	.init_irq	= keystone_init_irq,
 	.timer		= &keystone_timer,
+	.handle_irq	= gic_handle_irq,
 	.init_machine	= keystone_init,
 	.dt_compat	= keystone_match,
 MACHINE_END
