@@ -112,15 +112,15 @@ static int keystone_rproc_load_seg(struct rproc *rproc, const u8 *elf_data)
 
 		gda = keystone_rproc_get_global_addr(rproc, da, memsz);
 		if (!gda) {
-			dev_err(dev, "bad phdr da 0x%x mem 0x%x\n", da, memsz);
+			dev_err(dev, "bad phdr da 0x%x len %d\n", da, memsz);
 			ret = -EINVAL;
 			break;
 		}
 
 		va = devm_ioremap_nocache(rproc->dev, gda, memsz);
 		if (!va) {
-			dev_err(rproc->dev, "failed to ioremap: %d\n",
-				(int) va);
+			dev_err(dev, "failed to ioremap 0x%x: %d\n",
+				da, (int) va);
 			return -EBUSY;
 		}
 
@@ -142,6 +142,27 @@ static int keystone_rproc_load_seg(struct rproc *rproc, const u8 *elf_data)
 	}
 
 	return ret;
+}
+
+static void *keystone_rproc_da_to_va(struct rproc *rproc, u64 da, int len)
+{
+	u32 gda;
+	void *va;
+
+	gda = keystone_rproc_get_global_addr(rproc, da, len);
+	if (!gda) {
+		dev_err(rproc->dev, "bad phdr da 0x%x len %d\n", (int)da, len);
+		return 0;
+	}
+
+	va = devm_ioremap_nocache(rproc->dev, gda, len);
+	if (!va) {
+		dev_err(rproc->dev, "failed to ioremap 0x%x: %d\n",
+			(int)da, (int) va);
+		return 0;
+	}
+
+	return va;
 }
 
 /*
@@ -193,6 +214,7 @@ static struct rproc_ops keystone_rproc_ops = {
 	.stop		= keystone_rproc_stop,
 	.kick		= keystone_rproc_kick,
 	.load_seg	= keystone_rproc_load_seg,
+	.da_to_va	= keystone_rproc_da_to_va,
 };
 
 static int __devinit keystone_rproc_probe(struct platform_device *pdev)
