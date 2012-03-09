@@ -136,12 +136,10 @@ void rproc_delete_debug_dir(struct rproc *rproc)
 
 void rproc_create_debug_dir(struct rproc *rproc)
 {
-	struct device *dev = rproc->dev;
-
 	if (!rproc_dbg)
 		return;
 
-	rproc->dbg_dir = debugfs_create_dir(dev_name(dev), rproc_dbg);
+	rproc->dbg_dir = debugfs_create_dir(rproc->name, rproc_dbg);
 	if (!rproc->dbg_dir)
 		return;
 
