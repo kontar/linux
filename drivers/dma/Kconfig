@@ -259,6 +259,15 @@ config DMA_SA11X0
 	  SA-1110 SoCs.  This DMA engine can only be used with on-chip
 	  devices.
 
+config KEYSTONE_DMA
+	bool "TI Keystone platform Packet DMA support"
+	depends on TI_KEYSTONE
+	default y if TI_KEYSTONE
+	select DMA_ENGINE
+	help
+	  Enable support for the Packet DMA engine on Texas Instruments'
+	  Keystone family of devices.
+
 config DMA_ENGINE
 	bool
 
