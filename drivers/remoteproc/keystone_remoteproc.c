@@ -31,11 +31,6 @@
 #include "remoteproc_internal.h"
 
 
-#define ADDR_MAP_TABLE_LENGTH 3
-#define L2_RAM_ADDR_MAP_INDEX 0
-#define MSMC_ADDR_MAP_INDEX 1
-#define DDR3_ADDR_MAP_INDEX 2
-
 /**
  * struct local_addr_map - keystone remote processor local address map entry
  */
@@ -43,6 +38,7 @@ struct local_addr_map {
 	phys_addr_t global_addr;
 	phys_addr_t local_addr;
 	int length;
+	struct list_head node;
 };
 
 /**
@@ -53,7 +49,7 @@ struct keystone_rproc {
 	struct rproc	*rproc;
 	void __iomem	*ipc_int_gen;
 	void __iomem	*boot_magic_addr;
-	struct local_addr_map addr_map_table[ADDR_MAP_TABLE_LENGTH];
+	struct list_head addr_map;
 };
 
 /* Send an IPC interrupt to the remote DSP core */
@@ -68,18 +64,17 @@ static inline u64 keystone_rproc_get_global_addr(struct rproc *rproc, u64 da,
 						 int length)
 {
 	struct keystone_rproc *kproc = rproc->priv;
-	struct local_addr_map *addr_map = &kproc->addr_map_table[0];
-	int offset, i;
+	int offset;
+	struct local_addr_map *padd_map;
 
-	for (i = 0; i < ADDR_MAP_TABLE_LENGTH; i++) {
-		if (addr_map->local_addr <= da &&
-		    addr_map->local_addr + addr_map->length > da) {
-			offset = da - addr_map->local_addr;
-			if (offset + length > addr_map->length)
+	list_for_each_entry(padd_map, &kproc->addr_map, node) {
+		if (padd_map->local_addr <= da &&
+			padd_map->local_addr + padd_map->length > da) {
+			offset = da - padd_map->local_addr;
+			if (offset + length > padd_map->length)
 				return 0;
-			return (addr_map->global_addr + offset);
+			return padd_map->global_addr + offset;
 		}
-		addr_map++;
 	}
 	return 0;
 }
@@ -207,8 +202,9 @@ static int __devinit keystone_rproc_probe(struct platform_device *pdev)
 	struct rproc *rproc;
 	const char *core;
 	const char *pfirmware;
-	int ret;
-
+	int ret, len, i, num_entries;
+	u32 *paddr_map;
+	struct local_addr_map *pmapentry;
 
 	if (of_property_read_string(np, "core", &core)) {
 		dev_err(&pdev->dev, "No name in dt bindings\n");
@@ -230,10 +226,41 @@ static int __devinit keystone_rproc_probe(struct platform_device *pdev)
 	kproc = rproc->priv;
 	kproc->rproc = rproc;
 
-	if (of_property_read_u32_array(np, "addr_map",
-				       (u32 *)kproc->addr_map_table, 9)) {
-		dev_err(&pdev->dev, "No addr_map array  in dt bindings\n");
+	INIT_LIST_HEAD(&kproc->addr_map);
+
+	if (!of_get_property(np, "addr-map", &len)) {
+		dev_err(&pdev->dev, "No addr-map array in dt bindings\n");
 		return -ENODEV;
+	}
+
+	paddr_map = devm_kzalloc(&pdev->dev, len, GFP_KERNEL);
+	if (!paddr_map) {
+		dev_err(&pdev->dev, "memory allocation failed\n");
+		return -ENOMEM;
+	}
+	len = len / sizeof(u32);
+	if ((len % 3) != 0) {
+		dev_err(&pdev->dev, "invalid address map in dt binding\n");
+		return -EINVAL;
+	}
+	num_entries = len / 3;
+	if (of_property_read_u32_array(np, "addr-map",
+				       (u32 *)paddr_map, len)) {
+		dev_err(&pdev->dev, "No addr-map array  in dt bindings\n");
+		return -ENODEV;
+	}
+
+	for (i = 0; i < num_entries; i++) {
+		pmapentry  = devm_kzalloc(&pdev->dev,
+						sizeof(*pmapentry), GFP_KERNEL);
+		if (!pmapentry) {
+			dev_err(rproc->dev, "devm_kzalloc mapping failed\n");
+			return -ENOMEM;
+		}
+		pmapentry->global_addr = *paddr_map++;
+		pmapentry->local_addr = *paddr_map++;
+		pmapentry->length = *paddr_map++;
+		list_add_tail(&pmapentry->node, &kproc->addr_map);
 	}
 
 	kproc->boot_magic_addr = of_devm_iomap(rproc->dev, 0);
@@ -243,7 +270,7 @@ static int __devinit keystone_rproc_probe(struct platform_device *pdev)
 	}
 
 	kproc->ipc_int_gen = of_devm_iomap(rproc->dev, 1);
-	if (!kproc->boot_magic_addr) {
+	if (!kproc->ipc_int_gen) {
 		dev_err(rproc->dev, "failed to iomap DSP ipc interrupt register\n");
 		return -ENOMEM;
 	}
@@ -255,7 +282,6 @@ static int __devinit keystone_rproc_probe(struct platform_device *pdev)
 		dev_err(rproc->dev, "rproc registration failure\n");
 		goto free_rproc;
 	}
-
 	return 0;
 
 free_rproc:
