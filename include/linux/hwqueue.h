@@ -71,4 +71,18 @@ int hwqueue_push(struct hwqueue *queue, void *data, unsigned size);
 void *hwqueue_pop(struct hwqueue *queue, unsigned *size,
 		  struct timeval *timeout);
 
+struct keystone_pool {
+	const char	*name;
+	int		 num_desc;
+	int		 desc_size;
+};
+
+struct keystone_hwqueue_data {
+	struct keystone_pool	*pools;
+	unsigned		 num_pools;
+	unsigned		 base_id;
+	unsigned		 num_queues;
+	unsigned		 num_pdsps;
+};
+
 #endif /* __LINUX_HWQUEUE_H */
