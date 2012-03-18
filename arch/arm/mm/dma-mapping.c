@@ -754,6 +754,7 @@ int arm_dma_mmap(struct device *dev, struct vm_area_struct *vma,
 #ifdef CONFIG_MMU
 	unsigned long user_size, kern_size;
 	struct arm_vmregion *c;
+	unsigned long off = vma->vm_pgoff;
 
 	user_size = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
 	vma->vm_page_prot = dma_get_attr(DMA_ATTR_WRITE_COMBINE, attrs) ?
@@ -762,7 +763,6 @@ int arm_dma_mmap(struct device *dev, struct vm_area_struct *vma,
 
 	c = arm_vmregion_find(&consistent_head, (unsigned long)cpu_addr);
 	if (c) {
-		unsigned long off = vma->vm_pgoff;
 		struct page *pages = c->priv;
 
 		kern_size = (c->vm_end - c->vm_start) >> PAGE_SHIFT;
@@ -774,6 +774,12 @@ int arm_dma_mmap(struct device *dev, struct vm_area_struct *vma,
 					      user_size << PAGE_SHIFT,
 					      vma->vm_page_prot);
 		}
+	} else {
+		struct page *pages = virt_to_page(cpu_addr);
+		ret = remap_pfn_range(vma, vma->vm_start,
+				      page_to_pfn(pages) + off,
+				      user_size << PAGE_SHIFT,
+				      vma->vm_page_prot);
 	}
 #endif	/* CONFIG_MMU */
 
