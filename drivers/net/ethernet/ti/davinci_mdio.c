@@ -34,6 +34,7 @@
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/io.h>
+#include <linux/of.h>
 #include <linux/davinci_emac.h>
 
 /*
@@ -450,11 +451,17 @@ static const struct dev_pm_ops davinci_mdio_pm_ops = {
 	.resume		= davinci_mdio_resume,
 };
 
+static struct of_device_id __devinitdata of_match[] = {
+	{ .compatible = "ti,davinci_mdio", },
+	{},
+};
+
 static struct platform_driver davinci_mdio_driver = {
 	.driver = {
 		.name	 = "davinci_mdio",
 		.owner	 = THIS_MODULE,
 		.pm	 = &davinci_mdio_pm_ops,
+		.of_match_table	= of_match,
 	},
 	.probe = davinci_mdio_probe,
 	.remove = __devexit_p(davinci_mdio_remove),
