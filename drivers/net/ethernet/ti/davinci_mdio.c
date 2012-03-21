@@ -34,6 +34,7 @@
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/io.h>
+#include <linux/of.h>
 #include <linux/davinci_emac.h>
 
 /*
@@ -291,11 +292,13 @@ static int davinci_mdio_write(struct mii_bus *bus, int phy_id,
 static int __devinit davinci_mdio_probe(struct platform_device *pdev)
 {
 	struct mdio_platform_data *pdata = pdev->dev.platform_data;
+	struct device_node *node = pdev->dev.of_node;
 	struct device *dev = &pdev->dev;
 	struct davinci_mdio_data *data;
 	struct resource *res;
 	struct phy_device *phy;
 	int ret, addr;
+	u32 bus_freq;
 
 	data = kzalloc(sizeof(*data), GFP_KERNEL);
 	if (!data) {
@@ -303,7 +306,15 @@ static int __devinit davinci_mdio_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	data->pdata = pdata ? (*pdata) : default_pdata;
+	if (node) {
+		ret = of_property_read_u32(node, "bus-freq", &bus_freq);
+		if (ret < 0) {
+			dev_info(&pdev->dev, "Using default bus frequency\n");
+			bus_freq = 50000000;
+		}
+		data->pdata.bus_freq = bus_freq;
+	} else
+		data->pdata = pdata ? (*pdata) : default_pdata;
 
 	data->bus = mdiobus_alloc();
 	if (!data->bus) {
@@ -455,11 +466,17 @@ static const struct dev_pm_ops davinci_mdio_pm_ops = {
 	.resume		= davinci_mdio_resume,
 };
 
+static struct of_device_id __devinitdata of_match[] = {
+	{ .compatible = "ti,davinci_mdio", },
+	{},
+};
+
 static struct platform_driver davinci_mdio_driver = {
 	.driver = {
 		.name	 = "davinci_mdio",
 		.owner	 = THIS_MODULE,
 		.pm	 = &davinci_mdio_pm_ops,
+		.of_match_table	= of_match,
 	},
 	.probe = davinci_mdio_probe,
 	.remove = __devexit_p(davinci_mdio_remove),

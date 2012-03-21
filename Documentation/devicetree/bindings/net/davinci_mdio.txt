@@ -1,0 +1,16 @@
+MDIO on DaVinci SOCs
+
+Currently defined compatibles:
+- ti,davinci_mdio
+
+Required properties:
+- bus-freq: The operating frequency of the mdio bus
+
+Example:
+
+mdio: mdio@2090300 {
+			compatible	= "ti,davinci_mdio";
+			reg		= <0x2090300 0x100>;
+			bus-freq	= <50000000>;
+		};
+
