@@ -28,3 +28,4 @@ obj-$(CONFIG_PCH_DMA) += pch_dma.o
 obj-$(CONFIG_AMBA_PL08X) += amba-pl08x.o
 obj-$(CONFIG_EP93XX_DMA) += ep93xx_dma.o
 obj-$(CONFIG_KEYSTONE_DMA) += keystone-pktdma.o
+obj-$(CONFIG_KEYSTONE_UDMA) += keystone-udma.o
