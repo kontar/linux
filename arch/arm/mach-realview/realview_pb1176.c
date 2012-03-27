@@ -143,7 +143,7 @@ static struct pl022_ssp_controller ssp0_plat_data = {
 #define PB1176_CLCD_IRQ	{ IRQ_DC1176_CLCD, NO_IRQ }
 #define SCTL_IRQ	{ NO_IRQ, NO_IRQ }
 #define PB1176_WATCHDOG_IRQ	{ IRQ_DC1176_WATCHDOG, NO_IRQ }
-#define PB1176_GPIO0_IRQ	{ IRQ_PB1176_GPIO0, NO_IRQ }
+#define PB1176_GPIO0_IRQ	{ IRQ_DC1176_GPIO0, NO_IRQ }
 #define GPIO1_IRQ	{ IRQ_PB1176_GPIO1, NO_IRQ }
 #define PB1176_RTC_IRQ	{ IRQ_DC1176_RTC, NO_IRQ }
 #define SCI_IRQ		{ IRQ_PB1176_SCI, NO_IRQ }
@@ -384,6 +384,7 @@ static void __init realview_pb1176_init(void)
 MACHINE_START(REALVIEW_PB1176, "ARM-RealView PB1176")
 	/* Maintainer: ARM Ltd/Deep Blue Solutions Ltd */
 	.atag_offset	= 0x100,
+	.soc		= &realview_soc_desc,
 	.fixup		= realview_pb1176_fixup,
 	.map_io		= realview_pb1176_map_io,
 	.init_early	= realview_init_early,
