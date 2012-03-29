@@ -2,10 +2,11 @@
 
 Required properties:
  - compatible :	Should be "ti,keystone-rproc".
- - reg :	This property defines the address and size of the DSP core's global boot address
-		followed by the DSP core's ipc interrupt register address.
+ - reg :	This property defines the address and length of the
+		registers used to reset, start and interrupt a DSP core.
  - addr-map:	This property defines the memory address map used by the rproc device
-		to download and boot a DSP firmware image. Each tuple consists of a DSP core's
+		to download and boot a DSP firmware image.
+		Each tuple consists of a DSP core's
 		global address, local address and size.
  - core :	Name of this remote processor device.
  - firmware :	Name of DSP firmware image to load.
@@ -13,8 +14,10 @@ Required properties:
 Example:
 rproc0: rproc@108ffffc {
 			compatible = "ti,keystone-rproc";
-			reg = <0x108ffffc 4				/* boot address */
-			       0x02620240 4>;				/* ipc interrupt register */
+			reg = <0x02620040 4				/* boot address register */
+			       0x02350A5C 4				/* module control register */
+			       0x02350120 4				/* power domain transition command register */
+			       0x02620240 4>;				/* ipc interrupt generation register */
 			addr-map = <0x10800000 0x00800000 0x100000	/* l2-ram  global, local, size */
 				    0x0c000000 0x0c000000 0x200000	/* msmc-sram  global, local, size */
 				    0xa0000000 0xa0000000 0x20000000>;	/* ddr3-sram  global, local, size */
