@@ -365,8 +365,10 @@
 
 		rproc0: rproc@108ffffc {
 			compatible = "ti,keystone-rproc";
-			reg = <0x108ffffc 4				/* boot address */
-			       0x02620240 4>;				/* ipc interrupt register */
+			reg = <0x02620040 4				/* boot address register */
+			       0x02350A5C 4				/* module control register */
+			       0x02350120 4				/* power domain transition command register */
+			       0x02620240 4>;				/* ipc interrupt generation register */
 			addr-map = <0x10800000 0x00800000 0x100000	/* l2-ram  global, local, size */
 				    0x0c000000 0x0c000000 0x200000	/* msmc-sram  global, local, size */
 				    0xa0000000 0xa0000000 0x20000000>;	/* ddr3-sram  global, local, size */
@@ -376,7 +378,9 @@
 
 		rproc1: rproc@118ffffc {
 			compatible = "ti,keystone-rproc";
-			reg = <0x118ffffc 4
+			reg = <0x02620044 4
+			       0x02350A60 4
+			       0x02350120 4
 			       0x02620244 4>;
 			addr-map = <0x11800000 0x00800000 0x100000
 				    0x0c000000 0x0c000000 0x200000
@@ -387,7 +391,9 @@
 
 		rproc2: rproc@128ffffc {
 			compatible = "ti,keystone-rproc";
-			reg = <0x128ffffc 4
+			reg = <0x02620048 4
+			       0x02350A68 4
+			       0x02350120 4
 			       0x02620248 4>;
 			addr-map = <0x12800000 0x00800000 0x100000
 				    0x0c000000 0x0c000000 0x200000
@@ -398,7 +404,9 @@
 
 		rproc3: rproc@138ffffc {
 			compatible = "ti,keystone-rproc";
-			reg = <0x138ffffc 4
+			reg = <0x0262004C 4
+			       0x02350A70 4
+			       0x02350120 4
 			       0x0262024c 4>;
 			addr-map = <0x13800000 0x00800000 0x100000
 				    0x0c000000 0x0c000000 0x200000
