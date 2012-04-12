@@ -1640,6 +1640,16 @@ config BIG_LITTLE
 	help
 	  This option enables support for the big.LITTLE architecture.
 
+config BL_SWITCHER
+	bool "big.LITTLE switcher support"
+	depends on BIG_LITTLE && MCPM && HOTPLUG_CPU
+	select CPU_PM
+	select ARM_CPU_SUSPEND
+	help
+	  The big.LITTLE "switcher" provides the core functionality to
+	  transparently handle transition between a cluster of A15's
+	  and a cluster of A7's in a big.LITTLE system.
+
 choice
 	prompt "Memory split"
 	default VMSPLIT_3G
