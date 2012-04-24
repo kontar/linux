@@ -5,7 +5,7 @@
 config NET_VENDOR_TI
 	bool "Texas Instruments (TI) devices"
 	default y
-	depends on PCI || EISA || AR7 || (ARM && (ARCH_DAVINCI || ARCH_OMAP3))
+	depends on PCI || EISA || AR7 || (ARM && (ARCH_DAVINCI || ARCH_OMAP3 || ARCH_KEYSTONE))
 	---help---
 	  If you have a network (Ethernet) card belonging to this class, say Y
 	  and read the Ethernet-HOWTO, available from
@@ -16,7 +16,7 @@ config NET_VENDOR_TI
 	  the questions about TI devices. If you say Y, you will be asked for
 	  your specific card in the following questions.
 
-if NET_VENDOR_TI
+#if NET_VENDOR_TI
 
 config TI_DAVINCI_EMAC
 	tristate "TI DaVinci EMAC Support"
@@ -94,4 +94,4 @@ config CPMAC
 	---help---
 	  TI AR7 CPMAC Ethernet support
 
-endif # NET_VENDOR_TI
+#endif # NET_VENDOR_TI
