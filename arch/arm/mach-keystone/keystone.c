@@ -22,8 +22,10 @@
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/of_address.h>
+#include <linux/smp.h>
 
 #include <asm/unified.h>
+#include <asm/smp_plat.h>
 #include <asm/arch_timer.h>
 #include <asm/cacheflush.h>
 #include <asm/hardware/arm_timer.h>
@@ -37,9 +39,6 @@
 #include <mach/irqs.h>
 
 #include "core.h"
-
-int tmr16_timer_sched_clock_init(void);
-int tmr16_timer_register(void);
 
 static struct map_desc io_desc[] = {
        {
@@ -55,9 +54,12 @@ static void __init keystone_map_io(void)
        iotable_init(io_desc, sizeof(io_desc)/sizeof(struct map_desc));
 }
 
+unsigned int sec_boot_addr[4];
+
 void keystone_set_cpu_jump(int cpu, void *jump_addr)
 {
-	BUG();
+	cpu = cpu_logical_map(cpu);
+	sec_boot_addr[cpu] = virt_to_phys(jump_addr);
 }
 
 const static struct of_device_id irq_match[] = {
@@ -73,10 +75,8 @@ static void __init keystone_init_irq(void)
 
 static void __init keystone_timer_init(void)
 {
-//	arch_timer_of_register();
-//	arch_timer_sched_clock_init();
-	tmr16_timer_register();
-	tmr16_timer_sched_clock_init();
+	arch_timer_of_register();
+	arch_timer_sched_clock_init();
 }
 
 static struct sys_timer keystone_timer = {
@@ -94,7 +94,14 @@ static const char *keystone_match[] __initconst = {
 	NULL,
 };
 
+static struct arm_soc_desc keystone_soc_desc __initdata = {
+	.name	= "Keystone TI",
+	soc_smp_init_ops(keystone_soc_smp_init_ops)
+	soc_smp_ops(keystone_soc_smp_ops)
+};
+
 DT_MACHINE_START(KEYSTONE, "Keystone")
+	.soc		= &keystone_soc_desc,
 	.map_io		= keystone_map_io,
 	.init_irq	= keystone_init_irq,
 	.timer		= &keystone_timer,
