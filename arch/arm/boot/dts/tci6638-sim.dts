@@ -13,7 +13,7 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyS0,115200n8 debug earlyprintk rdinit=/bin/ash rw root=/dev/ram0 initrd=0x85000000,9M";
+		bootargs = "console=ttyS0,115200n8 debug earlyprintk lpj=50000 rdinit=/bin/ash rw root=/dev/ram0 initrd=0x85000000,9M";
 	};
 
 	memory {
@@ -26,12 +26,23 @@
 		cpu@0 {
 			compatible = "arm,cortex-a15";
 
-			timer {
-				compatible = "arm,armv7-timer";
-				interrupts = <1 13 0xf08 1 14 0xf08>;
-				clock-frequency = <500000000>; /* Freq in Hz - optional */
-			};
 		};
+
+		cpu@1 {
+			compatible = "arm,cortex-a15";
+
+		};
+
+		cpu@2 {
+			compatible = "arm,cortex-a15";
+
+		};
+
+		cpu@3 {
+			compatible = "arm,cortex-a15";
+
+		};
+
 	};
 
 	soc {
@@ -49,6 +60,12 @@
 			interrupt-controller;
 			reg = <0x02561000 0x1000>,
 			      <0x02562000 0x2000>;
+		};
+
+		timer {
+			compatible = "arm,armv7-timer";
+			interrupts = <1 13 0xf08 1 14 0xf08>;
+			clock-frequency = <10000000>; /* Freq in Hz - optional */
 		};
 
 		uart0:	serial@02530c00 {
