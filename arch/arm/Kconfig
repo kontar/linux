@@ -377,6 +377,7 @@ config ARCH_KEYSTONE
 	select ARCH_SPARSEMEM_ENABLE
 	select NEED_MACH_MEMORY_H
 	select HAVE_SCHED_CLOCK
+	select HAVE_SMP
 	help
 	  Support for boards based on the Texas Instruments Keystone family of
 	  SoCs.
