@@ -16,6 +16,8 @@ enable-all: enables all RX and TX channels associated with an instance of the
             packet dma.
 debug:      used to enable debug.To see debug messages the
             CONFIG_DMADEVICES_DEBUG must also be enabled in the .config
+rx-priority: used to set the packet dma global rx priority.
+tx-priority: used to set the packet dma global tx priority.
 
 The channels that will be used then need to be initialized. Both RX and TX
 channels need to be given bindings.

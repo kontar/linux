@@ -89,6 +89,8 @@
 			/* big-endian; */
 			/* enable-all; */
 			/* debug; */
+			/* rx-priority = <0>; */
+			/* tx-priority = <0>; */
 			channels {
 				udmatx0 {
 					transmit;
@@ -288,6 +290,8 @@
 			/* bigendian; */
 			enable-all;
 			/* debug; */
+			/* rx-priority = <0>; */
+			/* tx-priority = <0>; */
 			channels {
 				nettx {
 					transmit;
