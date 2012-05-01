@@ -49,7 +49,7 @@
 					reserved;
 				};
 				patx {
-					values = <645 1>;
+					values = <648 1>;
 					reserved;
 				};
 				infradma {
@@ -294,7 +294,7 @@
 					label		= "nettx";
 					pool		= "pool-net";
 					descriptors	= <128>;
-					submit-queue	= <645>;
+					submit-queue	= <648>;
 					/* complete-queue = <xx>; */
 					/* debug; */
 					/* channel = <0>; */
