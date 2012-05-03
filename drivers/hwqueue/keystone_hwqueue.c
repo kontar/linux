@@ -28,6 +28,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/firmware.h>
 #include <linux/interrupt.h>
 
@@ -85,11 +86,13 @@ struct khwq_reg_pdsp_command {
 };
 
 struct khwq_region {
-	unsigned	 desc_size;
-	unsigned	 num_desc;
+	u32		desc_size;
+	u32		num_desc;
+	u32		fixed_mem;
+	u32		next_pool_addr;
 	dma_addr_t	 dma_start, dma_end;
 	void		*virt_start, *virt_end;
-	unsigned	 link_index;
+	u32		link_index;
 };
 
 struct khwq_pool_info {
@@ -98,6 +101,7 @@ struct khwq_pool_info {
 	int			 region_offset;
 	int			 num_desc;
 	int			 desc_size;
+	u32			 start_addr;
 	struct hwqueue		*queue;
 	struct list_head	 list;
 };
@@ -126,6 +130,16 @@ struct khwq_range_info {
 	struct list_head	 list;
 };
 
+struct khwq_qmgr_info {
+	u32	start_queue;
+	u32 num_queues;
+	struct khwq_reg_config __iomem	*reg_config;
+	struct khwq_reg_region __iomem	*reg_region;
+	struct khwq_reg_queue __iomem	*reg_push, *reg_pop, *reg_peek;
+	void __iomem					*reg_status;
+	struct list_head			 	list;
+};
+
 #define RANGE_RESERVED		BIT(0)
 #define RANGE_HAS_IRQ		BIT(1)
 
@@ -141,11 +155,7 @@ struct khwq_device {
 	struct list_head		 queue_ranges;
 	struct list_head		 pools;
 	struct list_head		 pdsps;
-
-	struct khwq_reg_config __iomem	*reg_config;
-	struct khwq_reg_region __iomem	*reg_region;
-	struct khwq_reg_queue __iomem	*reg_push, *reg_pop, *reg_peek;
-	void __iomem			*reg_status;
+	struct list_head		 qmgrs;
 };
 
 struct khwq_instance {
@@ -172,6 +182,9 @@ struct khwq_instance {
 
 #define for_each_pdsp(kdev, pdsp)				\
 	list_for_each_entry(pdsp, &kdev->pdsps, list)
+
+#define for_each_qmgr(kdev, qmgr)				\
+	list_for_each_entry(qmgr, &kdev->qmgrs, list)
 
 static inline int khwq_pdsp_wait(u32 *addr, unsigned timeout, u32 flags)
 {
@@ -204,6 +217,20 @@ khwq_find_queue_range(struct hwqueue_instance *inst)
 		if (id >= range->queue_base &&
 		    id < range->queue_base + range->num_queues)
 			return range;
+	return NULL;
+}
+
+static inline struct khwq_qmgr_info *
+khwq_find_qmgr(struct hwqueue_instance *inst)
+{
+	struct khwq_device *kdev = from_hdev(inst->hdev);
+	unsigned id = hwqueue_inst_to_id(inst);
+	struct khwq_qmgr_info *qmgr;
+
+	for_each_qmgr(kdev, qmgr)
+		if ((id >= qmgr->start_queue) &&
+			(id < qmgr->start_queue + qmgr->num_queues))
+		    return qmgr;
 	return NULL;
 }
 
@@ -244,16 +271,19 @@ static int khwq_open(struct hwqueue_instance *inst, unsigned flags)
 	struct khwq_device *kdev = from_hdev(inst->hdev);
 	unsigned id = hwqueue_inst_to_id(inst);
 	struct khwq_range_info *range;
+	struct khwq_qmgr_info *qmgr;
 	int ret, irq_num = -1;
 
+	qmgr = khwq_find_qmgr(inst);
+	if (!qmgr)
+		return -EINVAL;
+
 	/* setup threshold, status bit is set when queue depth >= 1 */
-	__raw_writel(THRESH_GTE | 1, &kdev->reg_peek[id].ptr_size_thresh);
+	__raw_writel(THRESH_GTE | 1, &qmgr->reg_peek[id].ptr_size_thresh);
 
 	range = khwq_find_queue_range(inst);
 	if (!range)
 		return -ENODEV;
-
-	kq->irq_num = -1;
 
 	if (range->flags & RANGE_HAS_IRQ) {
 		irq_num = id - range->queue_base + range->irq_base;
@@ -268,8 +298,9 @@ static int khwq_open(struct hwqueue_instance *inst, unsigned flags)
 		}
 		/* disable irq at this time */
 		disable_irq(irq_num);
-		kq->irq_num = irq_num;
 	}
+	kq->irq_num = irq_num;
+
 	return 0;
 }
 
@@ -344,9 +375,14 @@ static int khwq_push(struct hwqueue_instance *inst, void *data, unsigned size)
 	struct khwq_instance *kq = hwqueue_inst_to_priv(inst);
 	unsigned id = hwqueue_inst_to_id(inst);
 	struct khwq_region *region;
+	struct khwq_qmgr_info *qmgr;
 	dma_addr_t dma;
 	u32 desc_size;
 	u32 val;
+
+	qmgr = khwq_find_qmgr(inst);
+	if (!qmgr)
+		return -EINVAL;
 
 	region = khwq_find_region_by_virt(kdev, kq, data);
 	if (!region)
@@ -362,7 +398,7 @@ static int khwq_push(struct hwqueue_instance *inst, void *data, unsigned size)
 
 	val = (u32)dma | ((desc_size / 16) - 1);
 
-	__raw_writel(val, &kdev->reg_push[id].ptr_size_thresh);
+	__raw_writel(val, &qmgr->reg_push[id].ptr_size_thresh);
 	return 0;
 }
 
@@ -372,11 +408,16 @@ static void *khwq_pop(struct hwqueue_instance *inst, unsigned *size)
 	struct khwq_instance *kq = hwqueue_inst_to_priv(inst);
 	unsigned id = hwqueue_inst_to_id(inst);
 	struct khwq_region *region;
+	struct khwq_qmgr_info *qmgr;
 	u32 val, desc_size;
 	dma_addr_t dma;
 	void *data;
 
-	val = __raw_readl(&kdev->reg_pop[id].ptr_size_thresh);
+	qmgr = khwq_find_qmgr(inst);
+	if (!qmgr)
+		return NULL;
+
+	val = __raw_readl(&qmgr->reg_pop[id].ptr_size_thresh);
 	if (!val)
 		return NULL;
 	dma = val & DESC_PTR_MASK;
@@ -399,21 +440,29 @@ static void *khwq_pop(struct hwqueue_instance *inst, unsigned *size)
 
 static bool khwq_is_empty(struct hwqueue_instance *inst)
 {
-	struct khwq_device *kdev = from_hdev(inst->hdev);
+	struct khwq_qmgr_info *qmgr;
 	unsigned id = hwqueue_inst_to_id(inst);
 	u32 val;
 
-	val = __raw_readl(kdev->reg_status + (id % BITS_PER_LONG));
+	qmgr = khwq_find_qmgr(inst);
+	if (!qmgr)
+		return -EINVAL;
+
+	val = __raw_readl(qmgr->reg_status + (id % BITS_PER_LONG));
 
 	return (val & BIT_MASK(id)) ? true : false;
 }
 
 static int khwq_flush(struct hwqueue_instance *inst)
 {
-	struct khwq_device *kdev = from_hdev(inst->hdev);
+	struct khwq_qmgr_info *qmgr;
 	unsigned id = hwqueue_inst_to_id(inst);
 
-	__raw_writel(0, &kdev->reg_push[id].ptr_size_thresh);
+	qmgr = khwq_find_qmgr(inst);
+	if (!qmgr)
+		return -EINVAL;
+
+	__raw_writel(0, &qmgr->reg_push[id].ptr_size_thresh);
 	return 0;
 }
 
@@ -439,7 +488,20 @@ khwq_find_match_region(struct khwq_device *kdev, struct khwq_pool_info *pool)
 		if (region->desc_size != pool->desc_size)
 			continue;
 
-		/* TODO: other checks here - e.g. mem types, fixed pools */
+		if (region->fixed_mem) {
+			/* memory region contains fixed address pool */
+			if (pool->start_addr) {
+				if (pool->start_addr != region->next_pool_addr)
+					continue; 	/* the new pool is not adjacent to the previous pool */
+			}
+			else
+				continue;	/* desc pool is not fixed memory type */
+		}
+		else {
+			/* memory region contains dynamically allocated pools */
+			if (pool->start_addr)
+				continue;
+		}
 
 		return region;
 	}
@@ -497,9 +559,21 @@ static void __devinit khwq_map_pools(struct khwq_device *kdev)
 		region->desc_size = pool->desc_size;
 		region->num_desc += pool->num_desc;
 
-		dev_dbg(kdev->dev, "pool %s: num:%d, size:%d, region:%d\n",
+		/* For fixed memory region, save the next pool addr */
+		if (pool->start_addr) {
+			if (!region->next_pool_addr) {
+				/* set the fixed start address of the region */
+				region->dma_start = pool->start_addr;
+				region->next_pool_addr = pool->start_addr;
+				region->fixed_mem = 1;
+			}
+			region->next_pool_addr += pool->num_desc * pool->desc_size;
+		}
+
+		dev_dbg(kdev->dev,
+			"pool %s: num:%d, size:%d, start:%08x, region:%d\n",
 			pool->name, pool->num_desc, pool->desc_size,
-			region_index(kdev, region));
+			pool->start_addr, region_index(kdev, region));
 	}
 }
 
@@ -510,7 +584,8 @@ static int __devinit khwq_setup_region(struct khwq_device *kdev,
 {
 	unsigned hw_num_desc, hw_desc_size, size;
 	int id = region_index(kdev, region);
-	struct khwq_reg_region __iomem  *regs = kdev->reg_region + id;
+	struct khwq_reg_region __iomem  *regs;
+	struct khwq_qmgr_info *qmgr;
 
 	/* unused region? */
 	if (!region->num_desc)
@@ -536,11 +611,17 @@ static int __devinit khwq_setup_region(struct khwq_device *kdev,
 	region->link_index = start_index;
 
 	size = region->num_desc * region->desc_size;
-	region->virt_start = dmam_alloc_coherent(kdev->dev, size,
+
+	if (region->fixed_mem) {
+		region->virt_start = phys_to_virt(region->dma_start);
+	}
+	else {
+		region->virt_start = dmam_alloc_coherent(kdev->dev, size,
 				&region->dma_start, GFP_KERNEL);
-	if (!region->virt_start) {
-		region->num_desc = 0;
-		return 0;
+		if (!region->virt_start) {
+			region->num_desc = 0;
+			return 0;
+		}
 	}
 
 	region->virt_end = region->virt_start + size;
@@ -554,9 +635,12 @@ static int __devinit khwq_setup_region(struct khwq_device *kdev,
 	hw_desc_size = (region->desc_size / 16) - 1;
 	hw_num_desc -= 5;
 
-	__raw_writel(region->dma_start, &regs->base);
-	__raw_writel(start_index, &regs->start_index);
-	__raw_writel(hw_desc_size << 16 | hw_num_desc, &regs->size_count);
+	for_each_qmgr(kdev, qmgr) {
+		regs = qmgr->reg_region + id;
+		__raw_writel(region->dma_start, &regs->base);
+		__raw_writel(start_index, &regs->start_index);
+		__raw_writel(hw_desc_size << 16 | hw_num_desc, &regs->size_count);
+	}
 
 	return region->num_desc;
 }
@@ -575,7 +659,8 @@ static int __devinit khwq_setup_regions(struct khwq_device *kdev)
 
 	 /* Next, we run through the regions and set things up */
 	for_each_region(kdev, region) {
-		link_index += khwq_setup_region(kdev, region,
+		if (kdev->num_index > link_index)
+			link_index += khwq_setup_region(kdev, region,
 					kdev->start_index + link_index,
 					kdev->num_index - link_index);
 	}
@@ -670,20 +755,24 @@ static int __devinit khwq_get_link_ram(struct khwq_device *kdev,
 
 static int __devinit khwq_setup_link_ram(struct khwq_device *kdev)
 {
-	struct khwq_link_ram_block *block = &kdev->link_rams[0];
+	struct khwq_link_ram_block *block;
+	struct khwq_qmgr_info *qmgr;
 
-	dev_dbg(kdev->dev, "linkram0: phys:%x, virt:%p, size:%x\n",
-		block->phys, block->virt, block->size);
-	__raw_writel(block->phys, &kdev->reg_config->link_ram_base0);
-	__raw_writel(block->size, &kdev->reg_config->link_ram_size0);
+	for_each_qmgr(kdev, qmgr) {
+		block = &kdev->link_rams[0];
+		dev_dbg(kdev->dev, "linkram0: phys:%x, virt:%p, size:%x\n",
+			block->phys, block->virt, block->size);
+		__raw_writel(block->phys, &qmgr->reg_config->link_ram_base0);
+		__raw_writel(block->size, &qmgr->reg_config->link_ram_size0);
 
-	block++;
-	if (!block->size)
-		return 0;
+		block++;
+		if (!block->size)
+			continue;
 
-	dev_dbg(kdev->dev, "linkram1: phys:%x, virt:%p, size:%x\n",
-		block->phys, block->virt, block->size);
-	__raw_writel(block->phys, &kdev->reg_config->link_ram_base1);
+		dev_dbg(kdev->dev, "linkram1: phys:%x, virt:%p, size:%x\n",
+			block->phys, block->virt, block->size);
+		__raw_writel(block->phys, &qmgr->reg_config->link_ram_base1);
+	}
 
 	return 0;
 }
@@ -729,7 +818,8 @@ static int khwq_init_queue_ranges(struct khwq_device *kdev,
 		}
 
 		ret = of_property_read_u32(child, "irq-base", &range->irq_base);
-		if (ret >= 0)
+		range->irq_base = irq_of_parse_and_map(child, 0);
+		if (range->irq_base > 0)
 			range->flags |= RANGE_HAS_IRQ;
 
 		if (of_get_property(child, "reserved", NULL))
@@ -782,6 +872,10 @@ static int khwq_init_pools(struct khwq_device *kdev, struct device_node *pools)
 			continue;
 		}
 
+		ret = of_property_read_u32(child, "address", &pool->start_addr);
+		if (ret < 0)
+			pool->start_addr = 0;	/* desc pool buffer allocated dynamically */
+
 		list_add_tail(&pool->list, &kdev->pools);
 
 		dev_dbg(dev, "added pool %s: %d descriptors of size %d\n",
@@ -791,6 +885,72 @@ static int khwq_init_pools(struct khwq_device *kdev, struct device_node *pools)
 	if (list_empty(&kdev->pools)) {
 		dev_err(dev, "no valid descriptor pool found\n");
 		return -ENODEV;
+	}
+
+	return 0;
+}
+
+static int khwq_init_qmgrs(struct khwq_device *kdev, struct device_node *qmgrs)
+{
+	struct device *dev = kdev->dev;
+	struct khwq_qmgr_info *qmgr;
+	struct device_node *child;
+	u32 temp[2];
+	int ret;
+
+	for_each_child_of_node(qmgrs, child) {
+
+		qmgr = devm_kzalloc(dev, sizeof(*qmgr), GFP_KERNEL);
+		if (!qmgr) {
+			dev_err(dev, "out of memory allocating qmgr\n");
+			return -ENOMEM;
+		}
+
+		ret = of_property_read_u32_array(child, "values", temp, 2);
+		if (!ret) {
+			qmgr->start_queue = temp[0];
+			qmgr->num_queues = temp[1];
+		} else {
+			dev_err(dev, "invalid qmgr queue range\n");
+			devm_kfree(dev, qmgr);
+			continue;
+		}
+
+		dev_dbg(dev, "qmgr start queue %d, number of queues %d\n",
+		       qmgr->start_queue, qmgr->num_queues);
+
+		qmgr->reg_peek		= of_iomap(child, 0);
+		qmgr->reg_status	= of_iomap(child, 1);
+		qmgr->reg_config	= of_iomap(child, 2);
+		qmgr->reg_region	= of_iomap(child, 3);
+		qmgr->reg_push		= of_iomap(child, 4);
+		qmgr->reg_pop		= of_iomap(child, 5);
+
+		if (!qmgr->reg_peek || !qmgr->reg_status || !qmgr->reg_config ||
+		    !qmgr->reg_region || !qmgr->reg_push || !qmgr->reg_pop) {
+			dev_err(dev, "failed to map qmgr regs\n");
+			if (qmgr->reg_peek)
+				devm_iounmap(dev, qmgr->reg_peek);
+			if (qmgr->reg_status)
+				devm_iounmap(dev, qmgr->reg_status);
+			if (qmgr->reg_config)
+				devm_iounmap(dev, qmgr->reg_config);
+			if (qmgr->reg_region)
+				devm_iounmap(dev, qmgr->reg_region);
+			if (qmgr->reg_push)
+				devm_iounmap(dev, qmgr->reg_push);
+			if (qmgr->reg_pop)
+				devm_iounmap(dev, qmgr->reg_pop);
+			kfree(qmgr);
+			continue;
+		}
+
+		list_add_tail(&qmgr->list, &kdev->qmgrs);
+
+		dev_dbg(dev, "added qmgr start queue %d, num of queues %d, reg_peek %p, reg_status %p, "
+			 "reg_config %p, reg_region %p, reg_push %p, reg_pop %p\n",
+			 qmgr->start_queue, qmgr->num_queues, qmgr->reg_peek, qmgr->reg_status,
+			 qmgr->reg_config, qmgr->reg_region, qmgr->reg_push, qmgr->reg_pop);
 	}
 
 	return 0;
@@ -954,7 +1114,7 @@ static int khwq_start_pdsps(struct khwq_device *kdev)
 static int __devinit khwq_probe(struct platform_device *pdev)
 {
 	struct device_node *node = pdev->dev.of_node;
-	struct device_node *pdsps, *descs, *queues;
+	struct device_node *qmgrs, *pdsps, *descs, *queues;
 	struct device *dev = &pdev->dev;
 	struct hwqueue_device *hdev;
 	struct khwq_device *kdev;
@@ -966,6 +1126,12 @@ static int __devinit khwq_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
+	qmgrs =  of_find_child_by_name(node, "qmgrs");
+	BUG_ON(!qmgrs);
+	if (!qmgrs) {
+		dev_err(dev, "queue manager info not specified\n");
+		return -ENODEV;
+	}
 	queues = of_find_child_by_name(node, "queues");
 	if (!queues) {
 		dev_err(dev, "queues not specified\n");
@@ -991,6 +1157,7 @@ static int __devinit khwq_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, kdev);
 	kdev->dev = dev;
 	INIT_LIST_HEAD(&kdev->queue_ranges);
+	INIT_LIST_HEAD(&kdev->qmgrs);
 	INIT_LIST_HEAD(&kdev->pools);
 	INIT_LIST_HEAD(&kdev->pdsps);
 
@@ -1003,6 +1170,11 @@ static int __devinit khwq_probe(struct platform_device *pdev)
 
 	/* get usable queue range values from device tree */
 	ret = khwq_init_queue_ranges(kdev, queues);
+	if (ret)
+		return ret;
+
+	/* Initialize queue managers using device tree configuration */
+	ret = khwq_init_qmgrs(kdev, qmgrs);
 	if (ret)
 		return ret;
 
@@ -1021,24 +1193,6 @@ static int __devinit khwq_probe(struct platform_device *pdev)
 	ret = khwq_init_pools(kdev, descs);
 	if (ret)
 		return ret;
-
-	kdev->reg_peek		= of_devm_iomap(dev, 0);
-	kdev->reg_status	= of_devm_iomap(dev, 1);
-	kdev->reg_config	= of_devm_iomap(dev, 2);
-	kdev->reg_region	= of_devm_iomap(dev, 3);
-	kdev->reg_push		= of_devm_iomap(dev, 4);
-	kdev->reg_pop		= of_devm_iomap(dev, 5);
-
-	if (!kdev->reg_pop) {
-		dev_dbg(kdev->dev, "defaulting pop regs to push\n");
-		kdev->reg_pop = kdev->reg_push;
-	}
-
-	if (!kdev->reg_peek || !kdev->reg_status || !kdev->reg_config ||
-	    !kdev->reg_region || !kdev->reg_push || !kdev->reg_pop) {
-		dev_err(dev, "failed to set up register areas\n");
-		return -ENOMEM;
-	}
 
 	if (!of_property_read_u32_array(node, "regions", temp, 2)) {
 		kdev->start_region = temp[0];
