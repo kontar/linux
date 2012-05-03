@@ -87,7 +87,7 @@
 			       0x2a6d000 0x400>;	/* 4 - rxflow  */
 			loop-back;
 			/* big-endian; */
-			/* enable-all; */
+			enable-all;
 			/* debug; */
 			/* rx-priority = <0>; */
 			/* tx-priority = <0>; */
