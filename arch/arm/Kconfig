@@ -378,6 +378,7 @@ config ARCH_KEYSTONE
 	select NEED_MACH_MEMORY_H
 	select HAVE_SCHED_CLOCK
 	select HAVE_SMP
+	select TI_KEYSTONE
 	help
 	  Support for boards based on the Texas Instruments Keystone family of
 	  SoCs.
@@ -1051,6 +1052,8 @@ source "arch/arm/mach-ixp4xx/Kconfig"
 source "arch/arm/mach-ixp2000/Kconfig"
 
 source "arch/arm/mach-ixp23xx/Kconfig"
+
+source "arch/arm/mach-keystone/Kconfig"
 
 source "arch/arm/mach-kirkwood/Kconfig"
 

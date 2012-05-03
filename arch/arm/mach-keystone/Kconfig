@@ -1,0 +1,6 @@
+if ARCH_KEYSTONE
+
+config TI_KEYSTONE
+	bool
+
+endif
