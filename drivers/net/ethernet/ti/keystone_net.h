@@ -21,6 +21,7 @@
 
 #include "keystone_pa.h"
 
+#define KEYSTONE_NET_SIMULATION
 #define DEVICE_PSTREAM_CFG_REG_ADDR             0x02000604
 #define DEVICE_PSTREAM_CFG_REG_VAL_ROUTE_PDSP0	0
 

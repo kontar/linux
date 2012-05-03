@@ -750,7 +750,9 @@ static void keystone_adjust_link(struct net_device *ndev)
 	}
 	if (new_state) {
 		keystone_update_phystatus(netcp);
+#ifndef KEYSTONE_NET_SIMULATION
 		phy_print_status(netcp->phydev);
+#endif
 	}
 
 	spin_unlock_irqrestore(&netcp->lock, flags);
@@ -817,6 +819,7 @@ static int netcp_ndo_open(struct net_device *ndev)
 	netcp->pa_offset = 0;
 
 	netcp->phydev = NULL;
+#ifndef KEYSTONE_NET_SIMULATION
 	/* use the first phy on the bus if pdata did not give us a phy id */
 	if (!netcp->phy_id) {
 		struct device *phy;
@@ -847,7 +850,9 @@ static int netcp_ndo_open(struct net_device *ndev)
 			"(sgmii_bus:phy_addr=%s, id=%x)\n",
 			netcp->phydev->drv->name, dev_name(&netcp->phydev->dev),
 			netcp->phydev->phy_id);
-	} else {
+	} else
+#endif
+	{
 		/* No PHY , fix the link, speed and duplex settings */
 		dev_notice(netcp->dev, "no phy, defaulting to 100/full\n");
 		netcp->link = 1;
@@ -856,8 +861,10 @@ static int netcp_ndo_open(struct net_device *ndev)
 		keystone_update_phystatus(netcp);
 	}
 
+#ifndef KEYSTONE_NET_SIMULATION
 	if (netcp->phydev)
 		phy_start(netcp->phydev);
+#endif
 
 	napi_enable(&netcp->napi);
 
@@ -929,9 +936,10 @@ static int netcp_ndo_stop(struct net_device *ndev)
 
 	netcp_set_rx_state(netcp, RX_STATE_INVALID);
 
+#ifndef KEYSTONE_NET_SIMULATION
 	if (netcp->phydev)
 		phy_disconnect(netcp->phydev);
-
+#endif
 	ethss_stop();
 
 	dev_dbg(netcp->dev, "netcp device %s stopped\n", ndev->name);

@@ -1114,6 +1114,7 @@ int pa_open(struct netcp_module_data *data)
 {
 	struct pa_device *pa_dev = pa_from_module(data);
 
+#ifndef KEYSTONE_NET_SIMULATION
 	pa_dev->pktproc = clk_get(pa_dev->dev, "clk_pktproc");
 	if (IS_ERR(pa_dev->pktproc)) {
 		dev_err(pa_dev->dev, "unable to get Packet Processor clock\n");
@@ -1121,7 +1122,7 @@ int pa_open(struct netcp_module_data *data)
 	}
 	else
 		clk_enable(pa_dev->pktproc);
-
+#endif
 	keystone_pa_reset(pa_dev);
 
 	return 0;
@@ -1131,9 +1132,10 @@ int pa_close(struct netcp_module_data *data)
 {
 	struct pa_device *pa_dev = pa_from_module(data);
 
+#ifndef KEYSTONE_NET_SIMULATION
 	clk_disable(pa_dev->pktproc);
 	clk_put(pa_dev->pktproc);
-
+#endif
 	return 0;
 }
 

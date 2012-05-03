@@ -471,23 +471,31 @@ static void keystone_get_ethtool_stats(struct net_device *ndev,
 static int keystone_get_settings(struct net_device *ndev,
 				 struct ethtool_cmd *ecmd)
 {
+#ifndef KEYSTONE_NET_SIMULATION
 	struct netcp_priv *netcp = netdev_priv(ndev);
 
 	if (netcp->phydev)
 		return phy_ethtool_gset(netcp->phydev, ecmd);
 	else
 		return -EOPNOTSUPP;
+#else
+	return -EOPNOTSUPP;
+#endif
 }
 
 static int keystone_set_settings(struct net_device *ndev,
 				 struct ethtool_cmd *ecmd)
 {
+#ifndef KEYSTONE_NET_SIMULATION
 	struct netcp_priv *netcp = netdev_priv(ndev);
 
 	if (netcp->phydev)
 		return phy_ethtool_sset(netcp->phydev, ecmd);
 	else
 		return -EOPNOTSUPP;
+#else
+	return -EOPNOTSUPP;
+#endif
 }
 
 static const struct ethtool_ops keystone_ethtool_ops = {
@@ -512,6 +520,7 @@ int ethss_init(struct device *dev)
 	struct clk *cpgmac;
 	void __iomem *regs;
 
+#ifndef KEYSTONE_NET_SIMULATION
 	cpgmac = clk_get(dev, "clk_cpgmac");
 	if (IS_ERR(cpgmac)) {
 		dev_err(dev, "unable to get CPGMAC clock\n");
@@ -519,6 +528,7 @@ int ethss_init(struct device *dev)
 	}
 	else
 		clk_enable(cpgmac);
+#endif
 
 	priv = kzalloc(sizeof(struct cpsw_priv), GFP_KERNEL);
 	BUG_ON(!priv);
