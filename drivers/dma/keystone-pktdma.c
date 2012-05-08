@@ -130,7 +130,8 @@ struct keystone_hw_desc {
 	u32	epib[4];
 	u32	psdata[16];
 	struct keystone_hw_priv priv;
-};
+} ____cacheline_aligned;
+
 #define DESC_MAX_SIZE	offsetof(struct keystone_hw_desc, priv)
 #define DESC_MIN_SIZE	offsetof(struct keystone_hw_desc, psdata)
 
@@ -156,17 +157,16 @@ enum keystone_chan_state {
 #define chan_state_is_transient(state) ((state) >= CHAN_STATE_OPENING)
 
 struct keystone_dma_desc {
+	struct list_head		 list;
 	atomic_t			 state;
-	struct keystone_hw_desc		*hwdesc;
-	unsigned			 orig_size;
-	struct dma_async_tx_descriptor	 adesc;
-	struct keystone_dma_chan	*chan;
+	enum dma_status			 status;
 	unsigned long			 options;
 	unsigned			 sg_len;
-	enum dma_status			 status;
 	struct scatterlist		*sg;
-	struct list_head		 list;
-};
+	struct keystone_hw_desc		*hwdesc;
+	struct dma_async_tx_descriptor	 adesc;
+	unsigned			 orig_size;
+} ____cacheline_aligned;
 
 #define from_hwdesc(d)		((d)->priv.desc)
 #define to_hwdesc(d)		((d)->hwdesc)
@@ -195,26 +195,28 @@ struct keystone_dma_device {
 #define dma_dev(dma)	((dma)->engine.dev)
 
 struct keystone_dma_chan {
+	enum dma_transfer_direction	 direction;
+	atomic_t			 state;
 	spinlock_t			 lock;
 	unsigned			 big_endian;
-	atomic_t			 state;
+
+	struct list_head		 free_descs, used_descs;
+
 	struct keystone_dma_device	*dma;
 	struct dma_chan			 achan;
 	struct hwqueue			*q_submit, *q_complete, *q_pool;
 	struct keystone_dma_desc	*descs;
-	struct list_head		 free_descs, used_descs;
 	int				 qnum_submit, qnum_complete;
 	struct dma_notify_info		 notify_info;
 	wait_queue_head_t		 state_wait_queue;
 
-	/*registers */
+	/* registers */
 	struct reg_chan __iomem		*reg_chan;
 	struct reg_tx_sched __iomem	*reg_tx_sched;
 	struct reg_rx_flow __iomem	*reg_rx_flow;
 
 	/* configuration stuff */
 	enum keystone_dma_tx_priority	 tx_sched_priority;
-	enum dma_transfer_direction	 direction;
 	int				 qcfg_submit, qcfg_complete;
 	unsigned			 channel, flow;
 	const char			*qname_pool;
@@ -442,8 +444,8 @@ static inline bool chan_is_alive(struct keystone_dma_chan *chan)
 	return __chan_is_alive(chan_get_state(chan));
 }
 
-static void __hwdesc_dump(struct keystone_dma_chan *chan,
-			  struct keystone_hw_desc *hwdesc)
+static inline void __hwdesc_dump(struct keystone_dma_chan *chan,
+				 struct keystone_hw_desc *hwdesc)
 {
 	unsigned long *data = (unsigned long *)hwdesc;
 
@@ -470,8 +472,8 @@ static void __hwdesc_dump(struct keystone_dma_chan *chan,
 		  data[0x1c], data[0x1d], data[0x1e], data[0x1f]);
 }
 
-static void hwdesc_dump(struct keystone_dma_chan *chan,
-			struct keystone_hw_desc *hwdesc, const char *why)
+static inline void hwdesc_dump(struct keystone_dma_chan *chan,
+			       struct keystone_hw_desc *hwdesc, const char *why)
 {
 	chan_vdbg(chan, "descriptor dump (%s): desc %p\n", why, hwdesc);
 	__hwdesc_dump(chan, hwdesc);
@@ -529,14 +531,14 @@ static bool chan_should_process(struct keystone_dma_chan *chan, bool in_poll)
 static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 			 enum dma_status status, int budget, bool in_poll)
 {
+	struct dma_async_tx_descriptor *adesc;
 	struct keystone_hw_desc *hwdesc;
 	struct keystone_dma_desc *desc;
-	struct dma_async_tx_descriptor *adesc;
 	struct scatterlist *sg;
 	unsigned long flags;
 	int packets = 0;
-	int len;
 	u32 *data;
+	int len;
 
 	while (budget < 0 || packets < budget) {
 
@@ -550,25 +552,24 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 		}
 
 		desc = from_hwdesc(hwdesc);
+		prefetchw(desc);
 
-		adesc = to_adesc(desc);
-
-		chan_vdbg(chan, "popped desc %p hw %p adesc %p from queue %d\n",
-			  desc, hwdesc, adesc, hwqueue_get_id(queue));
+		chan_vdbg(chan, "popped desc %p hw %p from queue %d\n",
+			  desc, hwdesc, hwqueue_get_id(queue));
 		hwdesc_dump(chan, hwdesc, "complete");
 
 		desc_set_state(chan, desc, DESC_STATE_ACTIVE, DESC_STATE_USER_RETURN);
 
 		sg = desc->sg;
 
-		if (desc->options & DMA_HAS_EPIB) {
+		if (unlikely(desc->options & DMA_HAS_EPIB)) {
 			len  = sg->length / sizeof(u32);
 			data = sg_virt(sg);
 			sg++;
 			desc_copy(chan, data, hwdesc->epib, len);
 		}
 
-		if (desc->options & DMA_HAS_PSINFO) {
+		if (unlikely(desc->options & DMA_HAS_PSINFO)) {
 			len  = sg->length / sizeof(u32);
 			data = sg_virt(sg);
 			sg++;
@@ -595,6 +596,7 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 
 		desc->status = status;
 
+		adesc = to_adesc(desc);
 		adesc->callback(adesc->callback_param);
 
 		chan_lock(chan, flags);
@@ -623,13 +625,14 @@ static void chan_complete_callback(void *arg)
 	}
 }
 
-static int __chan_submit(struct keystone_dma_chan *chan,
-			 struct keystone_dma_desc *desc)
+dma_cookie_t chan_submit(struct dma_async_tx_descriptor *adesc)
 {
+	struct keystone_dma_desc *desc = from_adesc(adesc);
+	struct keystone_dma_chan *chan = from_achan(adesc->chan);
 	struct keystone_hw_desc *hwdesc = to_hwdesc(desc);
 	int ret;
 
-	if (!chan_is_alive(chan)) {
+	if (unlikely(!chan_is_alive(chan))) {
 		desc_set_state(chan, desc, DESC_STATE_USER_ALLOC,
 			       DESC_STATE_FREE);
 		return -EINVAL;
@@ -642,19 +645,10 @@ static int __chan_submit(struct keystone_dma_chan *chan,
 		  hwdesc, hwqueue_get_id(chan->q_submit));
 
 	ret = hwqueue_push(chan->q_submit, hwdesc, DESC_MAX_SIZE);
-	WARN_ON(ret < 0);
-
-	return ret;
-}
-
-dma_cookie_t chan_submit(struct dma_async_tx_descriptor *adesc)
-{
-	struct keystone_dma_desc *desc = from_adesc(adesc);
-	struct keystone_dma_chan *chan = from_achan(adesc->chan);
-	int ret;
-
-	ret = __chan_submit(chan, desc);
-	return (ret < 0) ? ret : adesc->cookie;
+	if (unlikely(ret < 0))
+		return ret;
+	else
+		return adesc->cookie;
 }
 
 static struct hwqueue *chan_open_pool(struct keystone_dma_chan *chan)
@@ -1236,7 +1230,7 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 		return ERR_PTR(-EINVAL);
 	}
 
-	if (options & DMA_HAS_EPIB) {
+	if (unlikely(options & DMA_HAS_EPIB)) {
 		epiblen  = sg->length;
 		epib = sg_virt(sg);
 		num_sg--;
@@ -1250,7 +1244,7 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 		epiblen /= sizeof(u32);
 	}
 
-	if (options & DMA_HAS_PSINFO) {
+	if (unlikely(options & DMA_HAS_PSINFO)) {
 		pslen  = sg->length;
 		psdata = sg_virt(sg);
 		num_sg--;
@@ -1267,7 +1261,7 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 
 	chan_lock(chan, flags);
 
-	if (!chan_is_alive(chan)) {
+	if (unlikely(!chan_is_alive(chan))) {
 		dev_err(chan_dev(chan), "cannot submit in state %s\n",
 			chan_state_str(chan_get_state(chan)));
 		chan_unlock(chan, flags);
@@ -1275,11 +1269,14 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 	}
 
 	desc = first_free_desc(chan);
-	if (!desc) {
+	if (unlikely(!desc)) {
 		chan_vdbg(chan, "out of descriptors\n");
 		chan_unlock(chan, flags);
 		return ERR_PTR(-ENOMEM);
 	}
+
+	hwdesc = to_hwdesc(desc);
+	prefetchw(hwdesc);
 
 	desc_set_state(chan, desc, DESC_STATE_FREE, DESC_STATE_USER_ALLOC);
 
@@ -1298,13 +1295,12 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 	} while (0);
 #endif
 
-	hwdesc = to_hwdesc(desc);
-	adesc = to_adesc(desc);
-
 	desc->options	= options;
 	desc->sg_len	= _num_sg;
 	desc->sg	= _sg;
 
+	adesc = to_adesc(desc);
+	prefetchw(&adesc->callback);
 
 	WARN_ON(sg->length	    & ~DESC_LEN_MASK	||
 		chan->qnum_complete & ~DESC_RETQ_MASK);
