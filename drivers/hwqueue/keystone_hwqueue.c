@@ -508,6 +508,7 @@ static int __devinit khwq_setup_region(struct khwq_device *kdev,
 	unsigned hw_num_desc, hw_desc_size, size;
 	int id = region_index(kdev, region);
 	struct khwq_reg_region __iomem  *regs = kdev->reg_region + id;
+	struct page *page;
 
 	/* unused region? */
 	if (!region->num_desc)
@@ -533,14 +534,21 @@ static int __devinit khwq_setup_region(struct khwq_device *kdev,
 	region->link_index = start_index;
 
 	size = region->num_desc * region->desc_size;
-	region->virt_start = dmam_alloc_coherent(kdev->dev, size,
-				&region->dma_start, GFP_KERNEL);
+	region->virt_start = alloc_pages_exact(size, GFP_KERNEL);
 	if (!region->virt_start) {
 		region->num_desc = 0;
 		return 0;
 	}
-
 	region->virt_end = region->virt_start + size;
+	page = virt_to_page(region->virt_start);
+
+	region->dma_start = dma_map_page(kdev->dev, page, 0, size,
+					 DMA_BIDIRECTIONAL);
+	if (dma_mapping_error(kdev->dev, region->dma_start)) {
+		region->num_desc = 0;
+		free_pages_exact(region->virt_start, size);
+		return 0;
+	}
 	region->dma_end  = region->dma_start + size;
 
 	dev_dbg(kdev->dev,
