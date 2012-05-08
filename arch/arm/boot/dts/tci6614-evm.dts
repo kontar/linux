@@ -357,10 +357,12 @@
 
 			tx_channel = "nettx";
 			rx_channel = "netrx";
+			cpsw: cpsw@2090000 {
+				label = "keystone-cpsw";
+			};
 			pa: pa@2000000 {
 				label = "keystone-pa";
 			};
-
 		};
 
 		crypto: crypto@20c0000 {
