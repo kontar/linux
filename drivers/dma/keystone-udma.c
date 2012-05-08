@@ -26,6 +26,7 @@
 #include <linux/mm_types.h>
 #include <linux/virtio_ring.h>
 #include <linux/udma.h>
+#include <linux/dma-contiguous.h>
 
 #include <mach/keystone-dma.h>
 
@@ -55,7 +56,7 @@ struct udma_map {
 	struct udma_user	*user;
 	struct list_head	 node;
 	size_t			 size;
-	dma_addr_t		 dma_addr;
+	struct page		*page;
 	void			*cpu_addr;
 	struct kref		 refcount;
 	struct list_head	 channels;
@@ -493,6 +494,7 @@ static void udma_chan_kick(struct udma_user *user, struct udma_chan *chan)
 
 	dev_vdbg(udma_user_dev(user), "%s: last_avail %d, avail %d\n",
 		 udma_chan_name(chan), chan->last_avail_idx, vring->avail->idx);
+
 	dma_poll(chan->chan, -1);
 
 	dev_vdbg(udma_user_dev(user), "%s: kick end: avail %d, used %d\n",
@@ -513,11 +515,11 @@ static void udma_map_release(struct kref *kref)
 		udma_chan_destroy(chan);
 	}
 
-	dev_dbg(udma_map_dev(map), "closed map dma %lx, kern %lx, size %lx\n",
-		(unsigned long)map->dma_addr, (unsigned long)map->cpu_addr,
-		(unsigned long)map->size);
+	dev_dbg(udma_map_dev(map), "closed map kern %lx, size %lx\n",
+		(unsigned long)map->cpu_addr, (unsigned long)map->size);
 
-	dma_free_coherent(udma->dev, map->size, map->cpu_addr, map->dma_addr);
+	dma_release_from_contiguous(udma->dev, map->page,
+				   map->size >> PAGE_SHIFT);
 	udma_user_del_map(user, map);
 	kfree(map);
 }
@@ -553,6 +555,8 @@ static struct udma_map *udma_map_create(struct udma_user *user,
 {
 	struct udma_device *udma = user->udma;
 	struct udma_map *map;
+	unsigned long order;
+	size_t count;
 	int ret;
 
 	map = kzalloc(sizeof(*map), GFP_KERNEL);
@@ -567,21 +571,24 @@ static struct udma_map *udma_map_create(struct udma_user *user,
 	kref_init(&map->refcount);
 	INIT_LIST_HEAD(&map->channels);
 
-	map->cpu_addr = dma_alloc_coherent(udma->dev, map->size,
-					   &map->dma_addr, GFP_KERNEL);
-	if (!map->cpu_addr) {
+	count = map->size >> PAGE_SHIFT;
+	order = get_order(map->size);
+	map->page = dma_alloc_from_contiguous(udma->dev, count, order);
+	if (!map->page) {
 		dev_err(udma_map_dev(map), "failed to allocate dma memory\n");
 		kfree(map);
 		return ERR_PTR(-ENOMEM);
 	}
 
-	ret = dma_mmap_coherent(udma->dev, vma, map->cpu_addr, map->dma_addr,
-				map->size);
+	map->cpu_addr = page_address(map->page);
+	memset(map->cpu_addr, 0, map->size);
+
+	ret = remap_pfn_range(vma, vma->vm_start, page_to_pfn(map->page),
+			      map->size, vma->vm_page_prot);
 	if (ret) {
-		dev_err(udma_map_dev(map), "failed to map dma memory (%d)\n",
-			ret);
-		dma_free_coherent(udma->dev, map->size, map->cpu_addr,
-				  map->dma_addr);
+		dev_err(udma_map_dev(map), "failed to user map dma memory\n");
+		dma_release_from_contiguous(udma->dev, map->page, count);
+		kfree(map);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -590,9 +597,8 @@ static struct udma_map *udma_map_create(struct udma_user *user,
 
 	udma_user_add_map(user, map);
 
-	dev_dbg(udma_map_dev(map), "opened map %lx..%lx, dma %lx, kern %lx\n",
-		vma->vm_start, vma->vm_end - 1,
-		(unsigned long)map->dma_addr, (unsigned long)map->cpu_addr);
+	dev_dbg(udma_map_dev(map), "opened map %lx..%lx, kern %lx\n",
+		vma->vm_start, vma->vm_end - 1, (unsigned long)map->cpu_addr);
 
 	return map;
 }
