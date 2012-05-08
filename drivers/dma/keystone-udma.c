@@ -674,63 +674,40 @@ static long udma_fop_ioctl(struct file *file, unsigned int cmd,
 {
 	struct udma_user *user = file->private_data;
 	void __user *argp = (void __user *)arg;
-	int ret = -EINVAL;
+	struct udma_chan_data data;
+	struct udma_chan *chan;
+	int ret;
 
-	switch (cmd) {
-	case UDMA_IOC_ATTACH:
-	{
-		struct udma_chan_data data;
-		struct udma_chan *chan;
-
-		ret = -EFAULT;
-		if (copy_from_user(&data, argp, sizeof(data)))
-			break;
-
-		chan = udma_chan_create(user, &data);
-		ret = IS_ERR(chan) ? PTR_ERR(chan) : 0;
-		if (ret)
-			break;
-		data.handle = chan->id;
-
-		ret = -EFAULT;
-		if (copy_to_user(argp, &data, sizeof(data)))
-			break;
-
-		ret = 0;
-		break;
-	}
-	case UDMA_IOC_DETACH:
-	{
-		struct udma_chan *chan;
-
-		ret = -ENOENT;
+	if (likely(cmd == UDMA_IOC_KICK)) {
+		spin_lock(&udma_lock);
+		chan = idr_find(&user->idr, arg);
+		spin_unlock(&udma_lock);
+		if (unlikely(!chan))
+			return -ENOENT;
+		udma_chan_kick(user, chan);
+	} else if (cmd == UDMA_IOC_DETACH) {
 		spin_lock(&udma_lock);
 		chan = idr_find(&user->idr, arg);
 		spin_unlock(&udma_lock);
 		if (!chan)
-			break;
+			return -ENOENT;
 		udma_chan_destroy(chan);
-		break;
-	}
-	case UDMA_IOC_KICK:
-	{
-		struct udma_chan *chan;
+	} else if (cmd == UDMA_IOC_ATTACH) {
+		if (copy_from_user(&data, argp, sizeof(data)))
+			return -EFAULT;
 
-		ret = -ENOENT;
-		spin_lock(&udma_lock);
-		chan = idr_find(&user->idr, arg);
-		spin_unlock(&udma_lock);
-		if (chan) {
-			udma_chan_kick(user, chan);
-			ret = 0;
-		}
-		break;
-	}
-	default:
-		break;
-	}
+		chan = udma_chan_create(user, &data);
+		ret = IS_ERR(chan) ? PTR_ERR(chan) : 0;
+		if (ret)
+			return ret;
 
-	return ret;
+		data.handle = chan->id;
+
+		if (copy_to_user(argp, &data, sizeof(data)))
+			return -EFAULT;
+	} else
+		return -EINVAL;
+	return 0;
 }
 
 static int udma_fop_open(struct inode *inode, struct file *file)
