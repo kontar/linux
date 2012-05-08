@@ -309,30 +309,14 @@ static enum keystone_desc_state desc_get_state(struct keystone_dma_desc *desc)
 	return atomic_read(&desc->state);
 }
 
-static int desc_set_state(struct keystone_dma_chan *chan,
-			  struct keystone_dma_desc *desc,
-			  enum keystone_desc_state old,
-			  enum keystone_desc_state new)
+static inline void desc_set_state(struct keystone_dma_chan *chan,
+				  struct keystone_dma_desc *desc,
+				  enum keystone_desc_state old,
+				  enum keystone_desc_state new)
 {
-	enum keystone_desc_state cur, err;
-
-retry:
+	enum keystone_desc_state cur;
 	cur = atomic_cmpxchg(&desc->state, old, new);
-	if (likely(cur == old))
-		return 0;
-
-	err = atomic_cmpxchg(&desc->state, cur, DESC_STATE_INVALID);
-	if (err != cur)
-		goto retry;
-
-	dev_err(chan_dev(desc->chan),
-		"unexpected state %s on switch to %s, expected %s\n",
-		desc_state_str(cur), desc_state_str(new), desc_state_str(old));
-	__WARN();
-
-	dev_err(chan_dev(desc->chan), "stack trace of previous modifier:\n");
-	list_del_init(&desc->list);
-	return -EINVAL;
+	WARN_ON(cur != old);
 }
 
 static const char *chan_state_str(enum keystone_chan_state state)
@@ -605,8 +589,11 @@ static int __chan_submit(struct keystone_dma_chan *chan,
 	struct keystone_hw_desc *hwdesc = to_hwdesc(desc);
 	int ret;
 
-	if (!chan_is_alive(chan))
+	if (!chan_is_alive(chan)) {
+		desc_set_state(chan, desc, DESC_STATE_USER_ALLOC,
+			       DESC_STATE_FREE);
 		return -EINVAL;
+	}
 
 	desc_set_state(chan, desc, DESC_STATE_USER_ALLOC, DESC_STATE_ACTIVE);
 
@@ -1247,7 +1234,6 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 		return ERR_PTR(-ENODEV);
 	}
 
-retry:
 	desc = first_free_desc(chan);
 	if (!desc) {
 		chan_vdbg(chan, "out of descriptors\n");
@@ -1255,8 +1241,7 @@ retry:
 		return ERR_PTR(-ENOMEM);
 	}
 
-	if (desc_set_state(chan, desc, DESC_STATE_FREE, DESC_STATE_USER_ALLOC))
-		goto retry;
+	desc_set_state(chan, desc, DESC_STATE_FREE, DESC_STATE_USER_ALLOC);
 
 	list_del_init(&desc->list);
 	list_add_tail(&desc->list, &chan->used_descs);
