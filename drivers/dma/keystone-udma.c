@@ -45,10 +45,10 @@ struct udma_device {
 
 struct udma_user {
 	struct udma_device	*udma;
+	struct idr		 idr;
 	struct list_head	 node;
 	struct list_head	 maps;
 	struct file		*file;
-	struct idr		 idr;
 };
 #define udma_user_dev(user)	udma_dev((user)->udma)
 
@@ -66,27 +66,28 @@ struct udma_map {
 struct udma_request {
 	struct udma_chan		*chan;
 	struct vring_desc		*desc;
-	struct scatterlist		 sg[1];
 	struct dma_async_tx_descriptor	*dma_desc;
 	dma_cookie_t			 cookie;
+	struct scatterlist		 sg[1];
 };
 
 struct udma_chan {
-	int				 id;
+	struct vring			 vring;
+
 	struct vm_area_struct		*last_vma;
 	struct udma_user		*user;
-	struct udma_map			*map;
-	struct list_head		 node;
-	struct vring			 vring;
 	struct dma_chan			*chan;
 	struct udma_request		*req;
-	__u16				 last_avail_idx;
+
 	unsigned			 last_req;
-	unsigned			 num_desc;
-	struct udma_chan_data	 data;
-	bool				 shutdown;
+	unsigned			 last_avail_idx;
 	enum dma_data_direction		 data_dir;
 	enum dma_transfer_direction	 xfer_dir;
+
+	struct udma_map			*map;
+	struct list_head		 node;
+	int				 id;
+	struct udma_chan_data		 data;
 };
 #define udma_chan_dev(chan)	udma_map_dev((chan)->map)
 #define udma_chan_name(chan)	((chan)->data.name)
@@ -293,8 +294,6 @@ static int udma_chan_setup_dma(struct udma_chan *chan)
 
 static void udma_chan_shutdown_dma(struct udma_chan *chan)
 {
-	chan->shutdown = true;
-	mb();
 	dma_release_channel(chan->chan);
 }
 
