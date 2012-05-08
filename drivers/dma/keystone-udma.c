@@ -443,8 +443,7 @@ static void udma_chan_complete_cb(void *data)
 	udma_chan_complete(chan, req, status);
 }
 
-static void udma_chan_submit(struct udma_chan *chan,
-			     struct vring_desc *desc)
+static int udma_chan_submit(struct udma_chan *chan, struct vring_desc *desc)
 {
 	struct udma_user *user = chan->user;
 	void __user *buf_virt = (void __user *)(unsigned long)desc->addr;
@@ -466,29 +465,31 @@ static void udma_chan_submit(struct udma_chan *chan,
 	if (unlikely(!map)) {
 		dev_err(udma_user_dev(user), "chan does not belong to map\n");
 		udma_chan_complete(chan, req, DMA_ERROR);
-		return;
+		return 0;
 	}
 
 	sg_init_one(req->sg, map->cpu_addr + offset, buf_size);
 	segs = dma_map_sg(udma_chan_dev(chan), req->sg, 1,
 			  chan->data_dir);
-	if (segs != 1) {
+	if (unlikely(segs != 1)) {
 		dev_err(udma_user_dev(user), "failed to map dma buffer\n");
 		udma_chan_complete(chan, req, DMA_ERROR);
-		return;
+		return 0;
 	}
 
 	req->dma_desc = chan->chan->device->device_prep_slave_sg(chan->chan,
 				req->sg, 1, chan->xfer_dir, 0);
-	if (IS_ERR(req->dma_desc)) {
-		dev_err(udma_user_dev(user), "failed to prep dma request\n");
+	if (unlikely(IS_ERR(req->dma_desc))) {
+		dev_err(udma_user_dev(user), "failed to prep dma\n");
 		udma_chan_complete(chan, req, DMA_ERROR);
-		return;
+		return -ENOMEM;
 	}
 
 	req->dma_desc->callback = udma_chan_complete_cb;
 	req->dma_desc->callback_param = req;
 	req->cookie = dmaengine_submit(req->dma_desc);
+
+	return 0;
 }
 
 static void udma_chan_kick(struct udma_user *user, struct udma_chan *chan)
@@ -502,7 +503,8 @@ static void udma_chan_kick(struct udma_user *user, struct udma_chan *chan)
 
 	for (idx = chan->last_avail_idx; idx != vring->avail->idx; idx++) {
 		desc = vring->desc + vring->avail->ring[idx & (vring->num - 1)];
-		udma_chan_submit(chan, desc);
+		if (udma_chan_submit(chan, desc) < 0)
+			break;
 	}
 	chan->last_avail_idx = idx;
 
