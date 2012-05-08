@@ -85,8 +85,8 @@ struct udma_chan {
 	unsigned			 num_desc;
 	struct udma_chan_data	 data;
 	bool				 shutdown;
-	enum dma_data_direction		 direction;
-	enum dma_transfer_direction	 dma_direction;
+	enum dma_data_direction		 data_dir;
+	enum dma_transfer_direction	 xfer_dir;
 };
 #define udma_chan_dev(chan)	udma_map_dev((chan)->map)
 #define udma_chan_name(chan)	((chan)->data.name)
@@ -252,9 +252,9 @@ udma_find_map(struct udma_user *user, struct udma_chan *chan,
 	return __udma_find_map(user, chan, start, end, offset);
 }
 
-static inline bool is_valid_direction(enum dma_transfer_direction direction)
+static inline bool is_valid_direction(enum dma_transfer_direction xfer_dir)
 {
-	return (direction == DMA_DEV_TO_MEM || direction == DMA_MEM_TO_DEV);
+	return (xfer_dir == DMA_DEV_TO_MEM || xfer_dir == DMA_MEM_TO_DEV);
 }
 
 static int udma_chan_setup_dma(struct udma_chan *chan)
@@ -276,7 +276,7 @@ static int udma_chan_setup_dma(struct udma_chan *chan)
 	}
 
 	memset(&config, 0, sizeof(config));
-	config.direction = data->direction;
+	config.direction = chan->xfer_dir;
 
 	error = dmaengine_slave_config(chan->chan, &config);
 	if (error < 0) {
@@ -357,10 +357,12 @@ udma_chan_create(struct udma_user *user, struct udma_chan_data *data)
 
 	vring_init(&chan->vring, data->num_desc, ring_virt, data->align);
 
-	if (data->direction == DMA_DEV_TO_MEM)
-		chan->dma_direction = DMA_FROM_DEVICE;
+	chan->xfer_dir = data->direction;
+
+	if (chan->xfer_dir == DMA_DEV_TO_MEM)
+		chan->data_dir = DMA_FROM_DEVICE;
 	else
-		chan->dma_direction = DMA_TO_DEVICE;
+		chan->data_dir = DMA_TO_DEVICE;
 
 	chan->id = udma_user_get_id(user, chan);
 	if (chan->id < 0) {
@@ -406,7 +408,7 @@ static void udma_chan_complete(struct udma_chan *chan,
 			       struct udma_request *req,
 			       enum dma_status status)
 {
-	enum dma_data_direction dir = chan->dma_direction;
+	enum dma_data_direction dir = chan->data_dir;
 	struct udma_user *user = chan->user;
 	struct vring *vring = &chan->vring;
 	int id = req->desc - vring->desc;
@@ -469,7 +471,7 @@ static void udma_chan_submit(struct udma_chan *chan,
 
 	sg_init_one(req->sg, map->cpu_addr + offset, buf_size);
 	segs = dma_map_sg(udma_chan_dev(chan), req->sg, 1,
-			  chan->dma_direction);
+			  chan->data_dir);
 	if (segs != 1) {
 		dev_err(udma_user_dev(user), "failed to map dma buffer\n");
 		udma_chan_complete(chan, req, DMA_ERROR);
@@ -477,7 +479,7 @@ static void udma_chan_submit(struct udma_chan *chan,
 	}
 
 	req->dma_desc = chan->chan->device->device_prep_slave_sg(chan->chan,
-				req->sg, 1, chan->data.direction, 0);
+				req->sg, 1, chan->xfer_dir, 0);
 	if (IS_ERR(req->dma_desc)) {
 		dev_err(udma_user_dev(user), "failed to prep dma request\n");
 		udma_chan_complete(chan, req, DMA_ERROR);
