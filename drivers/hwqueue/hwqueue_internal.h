@@ -89,14 +89,15 @@ struct hwqueue_device_ops {
 };
 
 struct hwqueue_device {
-	struct list_head		 list;
-	struct device			*dev;
 	unsigned			 base_id;
 	unsigned			 num_queues;
 	unsigned			 inst_shift;
-	unsigned			 priv_size;
 	void				*instances;
 	struct hwqueue_device_ops	*ops;
+
+	unsigned			 priv_size;
+	struct list_head		 list;
+	struct device			*dev;
 };
 
 static inline int hwqueue_inst_to_id(struct hwqueue_instance *inst)
