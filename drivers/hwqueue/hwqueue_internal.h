@@ -127,15 +127,11 @@ static inline struct hwqueue_handle *rcu_to_handle(struct rcu_head *rcu)
 
 static inline struct hwqueue_handle *hwqueue_to_handle(struct hwqueue *q)
 {
-	if (IS_ERR_OR_NULL(q))
-		return (struct hwqueue_handle *)q;
 	return container_of(q, struct hwqueue_handle, queue);
 }
 
 static inline struct hwqueue *hwqueue_from_handle(struct hwqueue_handle *qh)
 {
-	if (IS_ERR_OR_NULL(qh))
-		return (struct hwqueue *)qh;
 	return &qh->queue;
 }
 

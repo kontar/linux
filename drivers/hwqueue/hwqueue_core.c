@@ -101,7 +101,7 @@ int hwqueue_device_register(struct hwqueue_device *hdev)
 	int id, size, ret = -EEXIST;
 	struct hwqueue_device *b;
 
-	if (!hdev->ops || !hdev->dev)
+	if (!hdev->ops || !hdev->dev || !hdev->ops->push || !hdev->ops->pop)
 		return -EINVAL;
 
 	mutex_lock(&hwqueue_devices_lock);
@@ -586,7 +586,7 @@ int hwqueue_get_count(struct hwqueue *queue)
 	struct hwqueue_instance *inst = qh->inst;
 	struct hwqueue_device *hdev = inst->hdev;
 
-	if (!hdev->ops->get_count || !hwqueue_is_readable(qh))
+	if (unlikely(!hdev->ops->get_count || !hwqueue_is_readable(qh)))
 		return -EINVAL;
 
 	return hdev->ops->get_count(inst);
@@ -606,7 +606,7 @@ int hwqueue_flush(struct hwqueue *queue)
 	struct hwqueue_instance *inst = qh->inst;
 	struct hwqueue_device *hdev = inst->hdev;
 
-	if (!hdev->ops->flush || !hwqueue_is_writable(qh))
+	if (unlikely(!hdev->ops->flush || !hwqueue_is_writable(qh)))
 		return -EPERM;
 	return hdev->ops->flush(inst);
 }
@@ -626,7 +626,7 @@ int hwqueue_push(struct hwqueue *queue, void *data, unsigned size)
 	struct hwqueue_instance *inst = qh->inst;
 	struct hwqueue_device *hdev = inst->hdev;
 
-	if (!hdev->ops->push || !hwqueue_is_writable(qh))
+	if (unlikely(!hwqueue_is_writable(qh)))
 		return -EPERM;
 	atomic_inc(&qh->stats.pushes);
 	return hdev->ops->push(inst, data, size);
@@ -681,18 +681,16 @@ void *hwqueue_pop(struct hwqueue *queue, unsigned *size,
 	struct hwqueue_device *hdev = inst->hdev;
 	void *data;
 
-	if (!hdev->ops->pop || !hwqueue_is_readable(qh))
+	if (unlikely(!hwqueue_is_readable(qh)))
 		return ERR_PTR(-EPERM);
 	atomic_inc(&qh->stats.pops);
 
 	data = hdev->ops->pop(inst, size);
-	if (data)
+	if (likely(data))
 		return data;
 
-	if (timeout && !timeout->tv_sec && !timeout->tv_usec)
-		return NULL;
-
-	if (qh->flags & O_NONBLOCK)
+	if (likely((qh->flags & O_NONBLOCK) ||
+		   (timeout && !timeout->tv_sec && !timeout->tv_usec)))
 		return NULL;
 
 	return __hwqueue_pop_slow(inst, size, timeout);
