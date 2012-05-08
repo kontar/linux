@@ -344,6 +344,7 @@
 		mdio: mdio@2090300 {
 			compatible	= "ti,davinci_mdio";
 			reg		= <0x2090300 0x100>;
+			bus-freq	= <50000000>;
 		};
 
 		udma0 {
