@@ -196,6 +196,7 @@ struct keystone_dma_device {
 
 struct keystone_dma_chan {
 	spinlock_t			 lock;
+	unsigned			 big_endian;
 	atomic_t			 state;
 	struct keystone_dma_device	*dma;
 	struct dma_chan			 achan;
@@ -277,15 +278,63 @@ static inline struct dma_chan *dev_to_dma_chan(struct device *dev)
 	return chan_dev->chan;
 }
 
-static inline u32 desc_read(struct keystone_dma_device *dma, u32 *field)
+static inline u32 desc_get_len(struct keystone_dma_chan *chan,
+			       struct keystone_hw_desc *hwdesc)
 {
-	return (dma->big_endian) ?  be32_to_cpu(*field) : le32_to_cpu(*field);
+	if (unlikely(chan->big_endian))
+		return be32_to_cpu(hwdesc->desc_info) & DESC_LEN_MASK;
+	else
+		return le32_to_cpu(hwdesc->desc_info) & DESC_LEN_MASK;
 }
 
-static inline void desc_write(struct keystone_dma_device *dma,
-			      u32 *field, u32 val)
+/*
+ * fill up descriptor fields without letting gcc generate horrid branch ridden
+ * code
+ */
+static inline void desc_fill(struct keystone_dma_chan *chan,
+			     struct keystone_hw_desc *hwdesc,
+			     u32 desc_info,
+			     u32 tag_info,
+			     u32 packet_info,
+			     u32 buff_len,
+			     u32 buff,
+			     u32 next_desc,
+			     u32 orig_len,
+			     u32 orig_buff)
 {
-	*field = (dma->big_endian) ? cpu_to_be32(val) : cpu_to_le32(val);
+	if (unlikely(chan->big_endian)) {
+		hwdesc->desc_info    = cpu_to_be32(desc_info);
+		hwdesc->tag_info     = cpu_to_be32(tag_info);
+		hwdesc->packet_info  = cpu_to_be32(packet_info);
+		hwdesc->buff_len     = cpu_to_be32(buff_len);
+		hwdesc->buff         = cpu_to_be32(buff);
+		hwdesc->next_desc    = cpu_to_be32(next_desc);
+		hwdesc->orig_len     = cpu_to_be32(orig_len);
+		hwdesc->orig_buff    = cpu_to_be32(orig_buff);
+	} else {
+		hwdesc->desc_info    = cpu_to_le32(desc_info);
+		hwdesc->tag_info     = cpu_to_le32(tag_info);
+		hwdesc->packet_info  = cpu_to_le32(packet_info);
+		hwdesc->buff_len     = cpu_to_le32(buff_len);
+		hwdesc->buff         = cpu_to_le32(buff);
+		hwdesc->next_desc    = cpu_to_le32(next_desc);
+		hwdesc->orig_len     = cpu_to_le32(orig_len);
+		hwdesc->orig_buff    = cpu_to_le32(orig_buff);
+	}
+}
+
+static inline void desc_copy(struct keystone_dma_chan *chan,
+			     u32 *out, u32 *in, int words)
+{
+	int i;
+
+	if (unlikely(chan->big_endian)) {
+		for (i = 0; i < words; i++)
+			*out++ = cpu_to_be32(*in++);
+	} else {
+		for (i = 0; i < words; i++)
+			*out++ = cpu_to_le32(*in++);
+	}
 }
 
 static const char *desc_state_str(enum keystone_desc_state state)
@@ -428,11 +477,6 @@ static void hwdesc_dump(struct keystone_dma_chan *chan,
 	__hwdesc_dump(chan, hwdesc);
 }
 
-static inline void hwdesc_clear(struct keystone_hw_desc *hwdesc)
-{
-	memset(hwdesc, 0, DESC_MAX_SIZE);
-}
-
 static void desc_dump(struct keystone_dma_chan *chan,
 		      struct keystone_dma_desc *desc, const char *why)
 {
@@ -491,7 +535,7 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 	struct scatterlist *sg;
 	unsigned long flags;
 	int packets = 0;
-	int i, len;
+	int len;
 	u32 *data;
 
 	while (budget < 0 || packets < budget) {
@@ -521,18 +565,14 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 			len  = sg->length / sizeof(u32);
 			data = sg_virt(sg);
 			sg++;
-			for (i = 0; i < len; i++)
-				data[i] = desc_read(chan->dma,
-						    &hwdesc->epib[i]);
+			desc_copy(chan, data, hwdesc->epib, len);
 		}
 
 		if (desc->options & DMA_HAS_PSINFO) {
 			len  = sg->length / sizeof(u32);
 			data = sg_virt(sg);
 			sg++;
-			for (i = 0; i < len; i++)
-				data[i] = desc_read(chan->dma,
-						    &hwdesc->psdata[i]);
+			desc_copy(chan, data, hwdesc->psdata, len);
 		}
 
 #ifdef DDR_DEBUG
@@ -546,7 +586,7 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 		} while (0);
 #endif
 
-		len = desc_read(chan->dma, &hwdesc->desc_info) & DESC_LEN_MASK;
+		len = desc_get_len(chan, hwdesc);
 		if (len != sg->length) {
 			chan_vdbg(chan, "length adjusted %d -> %d\n",
 				  sg->length, len);
@@ -861,8 +901,6 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 #endif
 
 	for_all_descs(desc, chan) {
-		desc->chan = chan;
-
 		INIT_LIST_HEAD(&desc->list);
 		atomic_set(&desc->state, DESC_STATE_INVALID);
 
@@ -980,6 +1018,8 @@ static int chan_init(struct dma_chan *achan)
 	ret = chan_setup_queues(chan);
 	if (ret < 0)
 		return ret;
+
+	chan->big_endian = dma->big_endian;
 
 	ret = chan_setup_descs(chan);
 	if (ret < 0) {
@@ -1176,13 +1216,13 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 	struct dma_async_tx_descriptor *adesc;
 	struct keystone_hw_desc *hwdesc;
 	struct keystone_dma_desc *desc;
-	struct scatterlist *sg = _sg;
-	unsigned num_sg = _num_sg;
 	u32 pslen = 0, *psdata = NULL;
 	u32 epiblen = 0, *epib = NULL;
+	struct scatterlist *sg = _sg;
+	unsigned num_sg = _num_sg;
 	unsigned long flags;
-	u32 v, psflags;
-	int i;
+	u32 packet_info, psflags;
+	dma_addr_t dma;
 
 	chan_vdbg(chan, "prep, caller %pS, channel %p, direction %s\n",
 		  achan, caller,
@@ -1265,42 +1305,32 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 	desc->sg_len	= _num_sg;
 	desc->sg	= _sg;
 
-	hwdesc_clear(hwdesc);
-
-	desc_write(chan->dma, &hwdesc->tag_info,   chan->tag_info);
 
 	WARN_ON(sg->length	    & ~DESC_LEN_MASK	||
-		pslen		    & ~DESC_PSLEN_MASK	||
 		chan->qnum_complete & ~DESC_RETQ_MASK);
 
-	desc_write(chan->dma, &hwdesc->desc_info, sg->length);
-	desc_write(chan->dma, &hwdesc->buff_len,  sg->length);
-	desc_write(chan->dma, &hwdesc->orig_len,  sg->length);
 #ifdef DDR_DEBUG
-	desc_write(chan->dma, &hwdesc->buff, (chan->dma_start + 16 +
-					(to_cookie(chan, desc) * SZ_2K)));
-	desc_write(chan->dma, &hwdesc->orig_buff, (chan->dma_start + 16 +
-					(to_cookie(chan, desc) * SZ_2K)));
+	dma = (chan->dma_start + 16 + (to_cookie(chan, desc) * SZ_2K));
 #else
-	desc_write(chan->dma, &hwdesc->buff,	  sg_dma_address(sg));
-	desc_write(chan->dma, &hwdesc->orig_buff, sg_dma_address(sg));
+	dma = sg_dma_address(sg);
 #endif
+	packet_info = ((epib ? DESC_HAS_EPIB : 0)	 |
+		       pslen << DESC_PSLEN_SHIFT	 |
+		       psflags << DESC_PSFLAGS_SHIFT |
+		       chan->qnum_complete << DESC_RETQ_SHIFT);
 
-	v = (DESC_HAS_EPIB				|
-	     pslen		 << DESC_PSLEN_SHIFT	|
-	     psflags		 << DESC_PSFLAGS_SHIFT	|
-	     chan->qnum_complete << DESC_RETQ_SHIFT);
-	desc_write(chan->dma, &hwdesc->packet_info, v);
+	desc_fill(chan, hwdesc,
+		  sg->length,	  /* desc_info	 */
+		  chan->tag_info, /* tag_info	 */
+		  packet_info,	  /* packet_info */
+		  sg->length,	  /* buff_len	 */
+		  dma,		  /* buff	 */
+		  0,		  /* next_desc	 */
+		  sg->length,	  /* orig_len	 */
+		  dma);		  /* orig_buf	 */
 
-	for (i = 0; i < ARRAY_SIZE(hwdesc->epib); i++) {
-		desc_write(chan->dma, &hwdesc->epib[i],
-			   (i < epiblen) ? epib[i] : 0);
-	}
-
-	for (i = 0; i < ARRAY_SIZE(hwdesc->psdata); i++) {
-		desc_write(chan->dma, &hwdesc->psdata[i],
-			   (i < pslen) ? psdata[i] : 0);
-	}
+	desc_copy(chan, hwdesc->epib, epib, epiblen);
+	desc_copy(chan, hwdesc->psdata, psdata, pslen);
 
 	return adesc;
 }
