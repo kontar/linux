@@ -93,6 +93,7 @@ struct hwqueue_device {
 	struct device			*dev;
 	unsigned			 base_id;
 	unsigned			 num_queues;
+	unsigned			 inst_shift;
 	unsigned			 priv_size;
 	void				*instances;
 	struct hwqueue_device_ops	*ops;
@@ -102,18 +103,16 @@ static inline int hwqueue_inst_to_id(struct hwqueue_instance *inst)
 {
 	struct hwqueue_device *hdev = inst->hdev;
 	int offset = (void *)inst - hdev->instances;
-	int inst_size = hdev->priv_size + sizeof(struct hwqueue_instance);
+	int inst_size = 1 << hdev->inst_shift;
 
-	BUG_ON(offset % inst_size);
-	return offset / inst_size;
+	BUG_ON(offset & (inst_size - 1));
+	return offset >> hdev->inst_shift;
 }
 
 static inline struct hwqueue_instance *
 hwqueue_id_to_inst(struct hwqueue_device *hdev, unsigned id)
 {
-	int inst_size = hdev->priv_size + sizeof(struct hwqueue_instance);
-
-	return hdev->instances + (id * inst_size);
+	return hdev->instances + (id <<  hdev->inst_shift);
 }
 
 static inline void *hwqueue_inst_to_priv(struct hwqueue_instance *inst)

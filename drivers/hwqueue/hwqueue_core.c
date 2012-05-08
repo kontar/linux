@@ -115,8 +115,14 @@ int hwqueue_device_register(struct hwqueue_device *hdev)
 		}
 	}
 	ret = -ENOMEM;
+
+	/* how much do we need for instance data? */
 	size  = sizeof(struct hwqueue_instance) + hdev->priv_size;
-	size *= hdev->num_queues;
+
+	/* round this up to a power of 2, keep the push/pop arithmetic fast */
+	hdev->inst_shift = order_base_2(size);
+	size = (1 << hdev->inst_shift) * hdev->num_queues;
+
 	hdev->instances = kzalloc(size, GFP_KERNEL);
 	if (!hdev->instances)
 		goto unlock_ret;
