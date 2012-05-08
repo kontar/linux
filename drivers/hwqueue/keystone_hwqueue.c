@@ -295,21 +295,19 @@ static void khwq_set_notify(struct hwqueue_instance *inst, bool enabled)
 }
 
 static inline struct khwq_region *
-khwq_find_region_by_virt(struct khwq_device *kdev, struct khwq_instance *inst,
+khwq_find_region_by_virt(struct khwq_device *kdev, struct khwq_instance *kq,
 			 void *virt)
 {
 	struct khwq_region *region;
 
-	if (inst && inst->last &&
-	    inst->last->virt_start <= virt &&
-	    inst->last->virt_end > virt)
-		return inst->last;
+	if (likely(kq->last && kq->last->virt_start <= virt &&
+		   kq->last->virt_end > virt))
+		return kq->last;
 
 	for_each_region(kdev, region) {
-		if (region->virt_start <= virt &&
-		    region->virt_end > virt) {
-			inst->last = region;
-			return inst->last;
+		if (region->virt_start <= virt && region->virt_end > virt) {
+			kq->last = region;
+			return kq->last;
 		}
 	}
 
@@ -317,21 +315,19 @@ khwq_find_region_by_virt(struct khwq_device *kdev, struct khwq_instance *inst,
 }
 
 static inline struct khwq_region *
-khwq_find_region_by_dma(struct khwq_device *kdev, struct khwq_instance *inst,
+khwq_find_region_by_dma(struct khwq_device *kdev, struct khwq_instance *kq,
 			dma_addr_t dma)
 {
 	struct khwq_region *region;
 
-	if (inst && inst->last &&
-	    inst->last->dma_start <= dma &&
-	    inst->last->dma_end > dma)
-		return inst->last;
+	if (likely(kq->last && kq->last->dma_start <= dma &&
+		   kq->last->dma_end > dma))
+		return kq->last;
 
 	for_each_region(kdev, region) {
-		if (region->dma_start <= dma &&
-		    region->dma_end > dma) {
-			inst->last = region;
-			return inst->last;
+		if (region->dma_start <= dma && region->dma_end > dma) {
+			kq->last = region;
+			return kq->last;
 		}
 	}
 
@@ -362,6 +358,7 @@ static int khwq_push(struct hwqueue_instance *inst, void *data, unsigned size)
 	val = (u32)dma | ((desc_size / 16) - 1);
 
 	__raw_writel(val, &kdev->reg_push[id].ptr_size_thresh);
+
 	return 0;
 }
 
@@ -375,15 +372,17 @@ static void *khwq_pop(struct hwqueue_instance *inst, unsigned *size)
 	dma_addr_t dma;
 	void *data;
 
+retry:
 	val = __raw_readl(&kdev->reg_pop[id].ptr_size_thresh);
-	if (!val)
+	if (unlikely(!val))
 		return NULL;
+
 	dma = val & DESC_PTR_MASK;
 	desc_size = ((val & DESC_SIZE_MASK) + 1) * 16;
 
 	region = khwq_find_region_by_dma(kdev, kq, dma);
-	if (!region)
-		return ERR_PTR(-EINVAL);
+	if (WARN_ON(!region))
+		goto retry;
 
 	desc_size = min(desc_size, region->desc_size);
 
@@ -391,7 +390,9 @@ static void *khwq_pop(struct hwqueue_instance *inst, unsigned *size)
 
 	dma_sync_single_for_cpu(kdev->dev, dma, desc_size, DMA_FROM_DEVICE);
 
-	if (size)
+	prefetch(data);
+
+	if (unlikely(size))
 		*size = desc_size;
 
 	return data;
