@@ -73,6 +73,7 @@ struct udma_request {
 
 struct udma_chan {
 	int				 id;
+	struct vm_area_struct		*last_vma;
 	struct udma_user		*user;
 	struct udma_map			*map;
 	struct list_head		 node;
@@ -209,35 +210,46 @@ static void udma_user_put_id(struct udma_user *user, int id)
 }
 
 static struct udma_map *
-udma_map_from_user(struct udma_user *user, void * __user ptr, size_t size,
-		   unsigned long *offset)
+__udma_find_map(struct udma_user *user, struct udma_chan *chan,
+		unsigned long start, unsigned long end, unsigned long *offset)
 {
-	struct mm_struct *mm = current->active_mm;
-	unsigned long start = (unsigned long)ptr;
-	unsigned long end = start + size;
-	struct udma_map *map = NULL;
 	struct vm_area_struct *vma;
+	struct mm_struct *mm = current->active_mm;
+	struct udma_map *map = NULL;
 
 	down_read(&mm->mmap_sem);
 
 	vma = find_vma(mm, start);
-	if (!vma)
-		goto done;
 
-	if (vma->vm_file != user->file)
-		goto done;
-
-	if (vma->vm_start > start || vma->vm_end < end)
-		goto done;
-
-	map = vma->vm_private_data;
-
-	if (offset)
+	if (likely(vma && start >= vma->vm_start && end <= vma->vm_end &&
+		   vma->vm_file == user->file)) {
+		map = vma->vm_private_data;
 		*offset = start - vma->vm_start;
+		if (likely(chan))
+			chan->last_vma = vma;
+	}
 
-done:
 	up_read(&mm->mmap_sem);
+
 	return map;
+}
+
+static inline struct udma_map *
+udma_find_map(struct udma_user *user, struct udma_chan *chan,
+	      void * __user ptr, size_t size, unsigned long *offset)
+{
+	struct vm_area_struct *vma;
+	unsigned long start = (unsigned long)ptr;
+	unsigned long end = start + size;
+
+	vma = likely(chan) ? chan->last_vma : NULL;
+	if (likely(vma && start >= vma->vm_start && end <= vma->vm_end)) {
+		if (offset)
+			*offset = start - vma->vm_start;
+		return vma->vm_private_data;
+	}
+
+	return __udma_find_map(user, chan, start, end, offset);
 }
 
 static inline bool is_valid_direction(enum dma_transfer_direction direction)
@@ -313,7 +325,7 @@ udma_chan_create(struct udma_user *user, struct udma_chan_data *data)
 	}
 
 	ring_user = (void __user *)data->ring_virt;
-	map = udma_map_from_user(user, ring_user, ring_size, &offset);
+	map = udma_find_map(user, NULL, ring_user, ring_size, &offset);
 	if (!map) {
 		dev_err(dev, "(%s) chan does not belong to map\n",
 			data->name);
@@ -448,8 +460,8 @@ static void udma_chan_submit(struct udma_chan *chan,
 	req->desc	= desc;
 	req->dma_desc	= NULL;
 
-	map = udma_map_from_user(user, buf_virt, buf_size, &offset);
-	if (!map) {
+	map = udma_find_map(user, chan, buf_virt, buf_size, &offset);
+	if (unlikely(!map)) {
 		dev_err(udma_user_dev(user), "chan does not belong to map\n");
 		udma_chan_complete(chan, req, DMA_ERROR);
 		return;
