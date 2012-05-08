@@ -226,7 +226,15 @@ lpsc_clk(gem2,				main_div_chip_clk1, GEM2, GEM2);
 lpsc_clk(rsax2_0,			main_div_chip_clk1, RSAX2_0, GEM2);
 lpsc_clk(gem3,				main_div_chip_clk1, GEM3, GEM3);
 lpsc_clk(tcp3d_b,			main_div_chip_clk2, TCP3D_B, TCP3D_B);
-lpsc_clk(cpgmac,			clk_pktproc, CPGMAC, PASS);
+lpsc_clk(ethss,				clk_pktproc, CPGMAC, PASS);
+
+static struct clk clk_cpgmac = {
+	.parent		= &clk_ethss,
+};
+
+static struct clk clk_mdio = {
+	.parent		= &clk_ethss,
+};
 
 static struct clk_lookup clks[] = {
 	CLK(NULL, "ref_clk",			&ref_clk),
@@ -254,8 +262,10 @@ static struct clk_lookup clks[] = {
 	CLK(NULL,		"clk_debugss_trc",	&clk_debugss_trc),
 	CLK(NULL,		"clk_tetb_trc",		&clk_tetb_trc),
 	CLK("2090000.netcp",	"clk_pktproc",		&clk_pktproc),
+	CLK("2090000.netcp",	"clk_ethss",		&clk_ethss),
 	CLK("2090000.netcp",	"clk_cpgmac",		&clk_cpgmac),
 	CLK("20c0000.crypto",	NULL,			&clk_crypto),
+	CLK("2090300.mdio",	NULL,			&clk_mdio),
 	CLK(NULL,		"clk_pciex",		&clk_pciex),
 	CLK(NULL,		"clk_srio",		&clk_srio),
 	CLK(NULL,		"clk_bcp",		&clk_bcp),
