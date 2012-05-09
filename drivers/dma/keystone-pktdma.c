@@ -168,12 +168,6 @@ struct keystone_dma_desc {
 	unsigned			 orig_size;
 } ____cacheline_aligned;
 
-#define from_hwdesc(d)		((d)->priv.desc)
-#define to_hwdesc(d)		((d)->hwdesc)
-#define from_adesc(d)		container_of(d, struct keystone_dma_desc, adesc)
-#define to_adesc(d)		(&(d)->adesc)
-#define from_cookie(chan, c)	((chan)->descs + (c))
-#define to_cookie(chan, d)	((d) - (chan)->descs)
 #define desc_dev(d)		chan_dev((d)->chan)
 
 struct keystone_dma_device {
@@ -205,7 +199,8 @@ struct keystone_dma_chan {
 	struct keystone_dma_device	*dma;
 	struct dma_chan			 achan;
 	struct hwqueue			*q_submit, *q_complete, *q_pool;
-	struct keystone_dma_desc	*descs;
+	unsigned			 desc_shift;
+	void				*descs;
 	int				 qnum_submit, qnum_complete;
 	struct dma_notify_info		 notify_info;
 	wait_queue_head_t		 state_wait_queue;
@@ -245,11 +240,6 @@ struct keystone_dma_chan {
 		dev_vdbg(chan_dev(ch), format, ##arg);	\
 	} while (0)
 
-#define for_all_descs(desc, chan)				\
-	for ((desc) = (chan)->descs;				\
-	     (desc) < (chan)->descs + (chan)->num_descs;	\
-	     (desc)++)
-
 #define chan_lock(ch, flags)					\
 	do {							\
 		spin_lock_irqsave(&(ch)->lock, flags);		\
@@ -278,6 +268,46 @@ static inline struct dma_chan *dev_to_dma_chan(struct device *dev)
 
 	chan_dev = container_of(dev, typeof(*chan_dev), device);
 	return chan_dev->chan;
+}
+
+static inline struct keystone_dma_desc *
+desc_from_index(struct keystone_dma_chan *chan, unsigned idx)
+{
+	if (unlikely(idx > chan->num_descs))
+		return NULL;
+	return chan->descs + (idx << chan->desc_shift);
+}
+
+static inline unsigned int
+desc_to_index(struct keystone_dma_chan *chan, struct keystone_dma_desc *desc)
+{
+	unsigned offset = (void *)desc - chan->descs;
+	BUG_ON(offset & ((1 << chan->desc_shift) - 1));
+	return offset >> chan->desc_shift;
+}
+
+static inline struct keystone_dma_desc *
+desc_from_hwdesc(struct keystone_hw_desc *hwdesc)
+{
+	return hwdesc->priv.desc;
+}
+
+static inline struct keystone_hw_desc *
+desc_to_hwdesc(struct keystone_dma_desc *desc)
+{
+	return desc->hwdesc;
+}
+
+static inline struct keystone_dma_desc *
+desc_from_adesc(struct dma_async_tx_descriptor *adesc)
+{
+	return container_of(adesc, struct keystone_dma_desc, adesc);
+}
+
+static inline struct dma_async_tx_descriptor *
+desc_to_adesc(struct keystone_dma_desc *desc)
+{
+	return &desc->adesc;
 }
 
 static inline u32 desc_get_len(struct keystone_dma_chan *chan,
@@ -482,7 +512,7 @@ static inline void hwdesc_dump(struct keystone_dma_chan *chan,
 static void desc_dump(struct keystone_dma_chan *chan,
 		      struct keystone_dma_desc *desc, const char *why)
 {
-	struct keystone_hw_desc *hwdesc = to_hwdesc(desc);
+	struct keystone_hw_desc *hwdesc = desc_to_hwdesc(desc);
 
 	chan_vdbg(chan, "%s: state %s, desc %p\n", why,
 		  desc_state_str(desc_get_state(desc)), hwdesc);
@@ -551,7 +581,7 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 			break;
 		}
 
-		desc = from_hwdesc(hwdesc);
+		desc = desc_from_hwdesc(hwdesc);
 		prefetchw(desc);
 
 		chan_vdbg(chan, "popped desc %p hw %p from queue %d\n",
@@ -578,7 +608,7 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 
 #ifdef DDR_DEBUG
 		do {
-			char *base = chan->virt_start + (to_cookie(chan, desc) * SZ_2K);
+			char *base = chan->virt_start + (desc_to_index(chan, desc) * SZ_2K);
 			memcheck(chan, "start", 0, base, 0xab, 16);
 			if (chan->direction == DMA_FROM_DEVICE)
 				memcpy(sg_virt(sg), base + 16, sg->length);
@@ -596,7 +626,7 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 
 		desc->status = status;
 
-		adesc = to_adesc(desc);
+		adesc = desc_to_adesc(desc);
 		adesc->callback(adesc->callback_param);
 
 		chan_lock(chan, flags);
@@ -627,9 +657,9 @@ static void chan_complete_callback(void *arg)
 
 dma_cookie_t chan_submit(struct dma_async_tx_descriptor *adesc)
 {
-	struct keystone_dma_desc *desc = from_adesc(adesc);
+	struct keystone_dma_desc *desc = desc_from_adesc(adesc);
 	struct keystone_dma_chan *chan = from_achan(adesc->chan);
-	struct keystone_hw_desc *hwdesc = to_hwdesc(desc);
+	struct keystone_hw_desc *hwdesc = desc_to_hwdesc(desc);
 	int ret;
 
 	if (unlikely(!chan_is_alive(chan))) {
@@ -861,9 +891,11 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 	struct keystone_dma_desc *desc;
 	struct dma_async_tx_descriptor *adesc;
 	struct keystone_hw_desc *hwdesc;
-	int ndesc = 0;
+	int ndesc = 0, size, i;
 
-	chan->descs = kzalloc(sizeof(*desc) * chan->num_descs, GFP_KERNEL);
+	chan->desc_shift = order_base_2(sizeof(*desc));
+	size = 1 << chan->desc_shift;
+	chan->descs = kzalloc(size * chan->num_descs, GFP_KERNEL);
 	if (!chan->descs)
 		return -ENOMEM;
 
@@ -894,12 +926,13 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 	}
 #endif
 
-	for_all_descs(desc, chan) {
+	for (i = 0; i < chan->num_descs; i++) {
+		desc = desc_from_index(chan, i);
 		INIT_LIST_HEAD(&desc->list);
 		atomic_set(&desc->state, DESC_STATE_INVALID);
 
-		adesc = to_adesc(desc);
-		adesc->cookie = to_cookie(chan, desc);
+		adesc = desc_to_adesc(desc);
+		adesc->cookie = desc_to_index(chan, desc);
 		adesc->chan = to_achan(chan);
 		adesc->tx_submit = chan_submit;
 
@@ -937,8 +970,10 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 static void chan_destroy_descs(struct keystone_dma_chan *chan)
 {
 	struct keystone_dma_desc *desc;
+	int i;
 
-	for_all_descs(desc, chan) {
+	for (i = 0; i < chan->num_descs; i++) {
+		desc = desc_from_index(chan, i);
 		switch (desc_get_state(desc)) {
 		case DESC_STATE_FREE:
 			hwqueue_push(chan->q_pool, desc->hwdesc,
@@ -1180,7 +1215,7 @@ static enum dma_status chan_xfer_status(struct dma_chan *achan,
 				      struct dma_tx_state *txstate)
 {
 	struct keystone_dma_chan *chan = from_achan(achan);
-	struct keystone_dma_desc *desc = from_cookie(chan, cookie);
+	struct keystone_dma_desc *desc = desc_from_index(chan, cookie);
 	enum dma_status status;
 
 	switch (desc_get_state(desc)) {
@@ -1275,7 +1310,7 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 		return ERR_PTR(-ENOMEM);
 	}
 
-	hwdesc = to_hwdesc(desc);
+	hwdesc = desc_to_hwdesc(desc);
 	prefetchw(hwdesc);
 
 	desc_set_state(chan, desc, DESC_STATE_FREE, DESC_STATE_USER_ALLOC);
@@ -1287,7 +1322,7 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 
 #ifdef DDR_DEBUG
 	do {
-		char *base = chan->virt_start + (to_cookie(chan, desc) * SZ_2K);
+		char *base = chan->virt_start + (desc_to_index(chan, desc) * SZ_2K);
 		memset(base, 0xab, 16);
 		if (chan->direction == DMA_TO_DEVICE)
 			memcpy(base + 16, sg_virt(sg), sg->length);
@@ -1299,14 +1334,14 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 	desc->sg_len	= _num_sg;
 	desc->sg	= _sg;
 
-	adesc = to_adesc(desc);
+	adesc = desc_to_adesc(desc);
 	prefetchw(&adesc->callback);
 
 	WARN_ON(sg->length	    & ~DESC_LEN_MASK	||
 		chan->qnum_complete & ~DESC_RETQ_MASK);
 
 #ifdef DDR_DEBUG
-	dma = (chan->dma_start + 16 + (to_cookie(chan, desc) * SZ_2K));
+	dma = (chan->dma_start + 16 + (desc_to_index(chan, desc) * SZ_2K));
 #else
 	dma = sg_dma_address(sg);
 #endif
