@@ -157,8 +157,8 @@ enum keystone_chan_state {
 #define chan_state_is_transient(state) ((state) >= CHAN_STATE_OPENING)
 
 struct keystone_dma_desc {
-	struct list_head		 list;
 	atomic_t			 state;
+	unsigned			 free_next;
 	enum dma_status			 status;
 	unsigned long			 options;
 	unsigned			 sg_len;
@@ -169,6 +169,8 @@ struct keystone_dma_desc {
 } ____cacheline_aligned;
 
 #define desc_dev(d)		chan_dev((d)->chan)
+#define desc_free_index(f)	((f) & 0xffff)
+#define desc_free_token(f, t)	((f) | ((t) << 16))
 
 struct keystone_dma_device {
 	struct dma_device		 engine;
@@ -190,17 +192,16 @@ struct keystone_dma_device {
 
 struct keystone_dma_chan {
 	enum dma_transfer_direction	 direction;
+	unsigned			 desc_shift;
+	u32				 num_descs;
 	atomic_t			 state;
-	spinlock_t			 lock;
-	unsigned			 big_endian;
-
-	struct list_head		 free_descs;
+	atomic_t			 free_token;
+	atomic_t			 free_first;
 	atomic_t			 n_used_descs;
-
+	unsigned			 big_endian;
 	struct keystone_dma_device	*dma;
 	struct dma_chan			 achan;
 	struct hwqueue			*q_submit, *q_complete, *q_pool;
-	unsigned			 desc_shift;
 	void				*descs;
 	int				 qnum_submit, qnum_complete;
 	struct dma_notify_info		 notify_info;
@@ -216,7 +217,6 @@ struct keystone_dma_chan {
 	int				 qcfg_submit, qcfg_complete;
 	unsigned			 channel, flow;
 	const char			*qname_pool;
-	u32				 num_descs;
 	u32				 tag_info;
 	bool				 debug;
 
@@ -239,16 +239,6 @@ struct keystone_dma_chan {
 	do {							\
 		if ((ch)->debug)				\
 		dev_vdbg(chan_dev(ch), format, ##arg);	\
-	} while (0)
-
-#define chan_lock(ch, flags)					\
-	do {							\
-		spin_lock_irqsave(&(ch)->lock, flags);		\
-	} while (0)
-
-#define chan_unlock(ch, flags)					\
-	do {							\
-		spin_unlock_irqrestore(&(ch)->lock, flags);	\
 	} while (0)
 
 /**
@@ -315,15 +305,23 @@ static inline u32 desc_get_len(struct keystone_dma_chan *chan,
 static inline struct keystone_dma_desc *desc_get(struct keystone_dma_chan *chan)
 {
 	struct keystone_dma_desc *desc;
+	unsigned first, next, token, result;
 
-	if (unlikely(list_empty(&chan->free_descs)))
-		return NULL;
-
-	desc = list_first_entry(&chan->free_descs, struct keystone_dma_desc,
-				list);
-
-	list_del_init(&desc->list);
 	atomic_inc(&chan->n_used_descs);
+
+	token = atomic_inc_return(&chan->free_token);
+	first = atomic_read(&chan->free_first);
+
+	for (;;) {
+		desc = desc_from_index(chan, desc_free_index(first));
+		if (!desc)
+			return NULL;
+		next = desc_free_token(desc->free_next, token);
+		result = atomic_cmpxchg(&chan->free_first, first, next);
+		if (likely(result == first))
+			return desc;
+		first = result;
+	}
 
 	return desc;
 }
@@ -331,7 +329,22 @@ static inline struct keystone_dma_desc *desc_get(struct keystone_dma_chan *chan)
 static inline void desc_put(struct keystone_dma_chan *chan,
 			    struct keystone_dma_desc *desc)
 {
-	list_add_tail(&desc->list, &chan->free_descs);
+	unsigned index, first, next, token, result;
+
+	token = atomic_inc_return(&chan->free_token);
+	index = desc_to_index(chan, desc);
+	next = desc_free_token(index, token);
+
+	first = atomic_read(&chan->free_first);
+
+	for (;;) {
+		desc->free_next = desc_free_index(first);
+		result = atomic_cmpxchg(&chan->free_first, first, next);
+		if (likely(result == first))
+			break;
+		first = result;
+	}
+
 	atomic_dec(&chan->n_used_descs);
 }
 
@@ -581,7 +594,6 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 	struct keystone_hw_desc *hwdesc;
 	struct keystone_dma_desc *desc;
 	struct scatterlist *sg;
-	unsigned long flags;
 	int packets = 0;
 	u32 *data;
 	int len;
@@ -645,10 +657,8 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 		adesc = desc_to_adesc(desc);
 		adesc->callback(adesc->callback_param);
 
-		chan_lock(chan, flags);
 		desc_set_state(chan, desc, DESC_STATE_USER_RETURN, DESC_STATE_FREE);
 		desc_put(chan, desc);
-		chan_unlock(chan, flags);
 
 		packets ++;
 	}
@@ -916,6 +926,7 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 		return -ENOMEM;
 
 	atomic_set(&chan->n_used_descs, chan->num_descs);
+	atomic_set(&chan->free_first, -1);
 
 #ifdef DDR_DEBUG
 	if (chan->num_descs > 64) {
@@ -946,7 +957,6 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 
 	for (i = 0; i < chan->num_descs; i++) {
 		desc = desc_from_index(chan, i);
-		INIT_LIST_HEAD(&desc->list);
 		atomic_set(&desc->state, DESC_STATE_INVALID);
 
 		adesc = desc_to_adesc(desc);
@@ -1001,8 +1011,6 @@ static void chan_destroy_descs(struct keystone_dma_chan *chan)
 			desc_dump(chan, desc, "leaked descriptor");
 			break;
 		}
-
-		list_del_init(&desc->list);
 	}
 
 	kfree(chan->descs);
@@ -1267,7 +1275,6 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 	u32 epiblen = 0, *epib = NULL;
 	struct scatterlist *sg = _sg;
 	unsigned num_sg = _num_sg;
-	unsigned long flags;
 	u32 packet_info, psflags;
 	dma_addr_t dma;
 
@@ -1312,25 +1319,19 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 		pslen /= sizeof(u32);
 	}
 
-	chan_lock(chan, flags);
-
 	if (unlikely(!chan_is_alive(chan))) {
 		dev_err(chan_dev(chan), "cannot submit in state %s\n",
 			chan_state_str(chan_get_state(chan)));
-		chan_unlock(chan, flags);
 		return ERR_PTR(-ENODEV);
 	}
 
 	desc = desc_get(chan);
 	if (unlikely(!desc)) {
 		chan_vdbg(chan, "out of descriptors\n");
-		chan_unlock(chan, flags);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	desc_set_state(chan, desc, DESC_STATE_FREE, DESC_STATE_USER_ALLOC);
-
-	chan_unlock(chan, flags);
 
 	hwdesc = desc_to_hwdesc(desc);
 	prefetchw(hwdesc);
@@ -1525,10 +1526,7 @@ static __devinit int dma_init_chan(struct keystone_dma_device *dma,
 	if (!chan)
 		return -ENOMEM;
 
-	spin_lock_init(&chan->lock);
 	init_waitqueue_head(&chan->state_wait_queue);
-
-	INIT_LIST_HEAD(&chan->free_descs);
 
 	chan->dma	= dma;
 	chan->direction	= DMA_NONE;
