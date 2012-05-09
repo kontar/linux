@@ -194,7 +194,8 @@ struct keystone_dma_chan {
 	spinlock_t			 lock;
 	unsigned			 big_endian;
 
-	struct list_head		 free_descs, used_descs;
+	struct list_head		 free_descs;
+	atomic_t			 n_used_descs;
 
 	struct keystone_dma_device	*dma;
 	struct dma_chan			 achan;
@@ -253,10 +254,6 @@ struct keystone_dma_chan {
 #define first_free_desc(ch)					\
 	(list_empty(&(ch)->free_descs) ? NULL :			\
 	 list_first_entry(&(ch)->free_descs, struct keystone_dma_desc, list))
-
-#define first_used_desc(ch)					\
-	(list_empty(&(ch)->used_descs) ? NULL :			\
-	 list_first_entry(&(ch)->used_descs, struct keystone_dma_desc, list))
 
 /**
  * dev_to_dma_chan - convert a device pointer to the its sysfs container object
@@ -631,7 +628,7 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 
 		chan_lock(chan, flags);
 		desc_set_state(chan, desc, DESC_STATE_USER_RETURN, DESC_STATE_FREE);
-		list_del_init(&desc->list);
+		atomic_dec(&chan->n_used_descs);
 		list_add_tail(&desc->list, &chan->free_descs);
 		chan_unlock(chan, flags);
 
@@ -872,7 +869,8 @@ static void chan_stop(struct keystone_dma_chan *chan)
 	end = jiffies + msecs_to_jiffies(DMA_TIMEOUT);
 	do {
 		chan_complete(chan, chan->q_complete, DMA_SUCCESS, -1, false);
-		if (!first_used_desc(chan) || signal_pending(current))
+		if (!atomic_read(&chan->n_used_descs) ||
+		    signal_pending(current))
 			break;
 		schedule_timeout_interruptible(DMA_TIMEOUT / 10);
 	} while (time_after(end, jiffies));
@@ -1316,7 +1314,7 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 	desc_set_state(chan, desc, DESC_STATE_FREE, DESC_STATE_USER_ALLOC);
 
 	list_del_init(&desc->list);
-	list_add_tail(&desc->list, &chan->used_descs);
+	atomic_inc(&chan->n_used_descs);
 
 	chan_unlock(chan, flags);
 
@@ -1514,7 +1512,7 @@ static __devinit int dma_init_chan(struct keystone_dma_device *dma,
 	init_waitqueue_head(&chan->state_wait_queue);
 
 	INIT_LIST_HEAD(&chan->free_descs);
-	INIT_LIST_HEAD(&chan->used_descs);
+	atomic_set(&chan->n_used_descs, 0);
 
 	chan->dma	= dma;
 	chan->direction	= DMA_NONE;
