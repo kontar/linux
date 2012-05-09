@@ -645,8 +645,8 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 		} while (0);
 #endif
 
-		len = desc_get_len(chan, hwdesc);
-		if (len != sg->length) {
+		if (chan->direction != DMA_MEM_TO_DEV) {
+			len = desc_get_len(chan, hwdesc);
 			chan_vdbg(chan, "length adjusted %d -> %d\n",
 				  sg->length, len);
 			sg->length = len;
