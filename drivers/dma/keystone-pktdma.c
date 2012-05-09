@@ -251,10 +251,6 @@ struct keystone_dma_chan {
 		spin_unlock_irqrestore(&(ch)->lock, flags);	\
 	} while (0)
 
-#define first_free_desc(ch)					\
-	(list_empty(&(ch)->free_descs) ? NULL :			\
-	 list_first_entry(&(ch)->free_descs, struct keystone_dma_desc, list))
-
 /**
  * dev_to_dma_chan - convert a device pointer to the its sysfs container object
  * @dev - device node
@@ -314,6 +310,29 @@ static inline u32 desc_get_len(struct keystone_dma_chan *chan,
 		return be32_to_cpu(hwdesc->desc_info) & DESC_LEN_MASK;
 	else
 		return le32_to_cpu(hwdesc->desc_info) & DESC_LEN_MASK;
+}
+
+static inline struct keystone_dma_desc *desc_get(struct keystone_dma_chan *chan)
+{
+	struct keystone_dma_desc *desc;
+
+	if (unlikely(list_empty(&chan->free_descs)))
+		return NULL;
+
+	desc = list_first_entry(&chan->free_descs, struct keystone_dma_desc,
+				list);
+
+	list_del_init(&desc->list);
+	atomic_inc(&chan->n_used_descs);
+
+	return desc;
+}
+
+static inline void desc_put(struct keystone_dma_chan *chan,
+			    struct keystone_dma_desc *desc)
+{
+	list_add_tail(&desc->list, &chan->free_descs);
+	atomic_dec(&chan->n_used_descs);
 }
 
 /*
@@ -628,8 +647,7 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 
 		chan_lock(chan, flags);
 		desc_set_state(chan, desc, DESC_STATE_USER_RETURN, DESC_STATE_FREE);
-		atomic_dec(&chan->n_used_descs);
-		list_add_tail(&desc->list, &chan->free_descs);
+		desc_put(chan, desc);
 		chan_unlock(chan, flags);
 
 		packets ++;
@@ -897,6 +915,8 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 	if (!chan->descs)
 		return -ENOMEM;
 
+	atomic_set(&chan->n_used_descs, chan->num_descs);
+
 #ifdef DDR_DEBUG
 	if (chan->num_descs > 64) {
 		chan->virt_start = ioremap(msmc_mem_used, SZ_2K * chan->num_descs);
@@ -950,7 +970,7 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 
 		desc_set_state(chan, desc, DESC_STATE_INVALID, DESC_STATE_FREE);
 
-		list_add_tail(&desc->list, &chan->free_descs);
+		desc_put(chan, desc);
 
 		ndesc++;
 	}
@@ -1301,22 +1321,19 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 		return ERR_PTR(-ENODEV);
 	}
 
-	desc = first_free_desc(chan);
+	desc = desc_get(chan);
 	if (unlikely(!desc)) {
 		chan_vdbg(chan, "out of descriptors\n");
 		chan_unlock(chan, flags);
 		return ERR_PTR(-ENOMEM);
 	}
 
-	hwdesc = desc_to_hwdesc(desc);
-	prefetchw(hwdesc);
-
 	desc_set_state(chan, desc, DESC_STATE_FREE, DESC_STATE_USER_ALLOC);
 
-	list_del_init(&desc->list);
-	atomic_inc(&chan->n_used_descs);
-
 	chan_unlock(chan, flags);
+
+	hwdesc = desc_to_hwdesc(desc);
+	prefetchw(hwdesc);
 
 #ifdef DDR_DEBUG
 	do {
@@ -1512,7 +1529,6 @@ static __devinit int dma_init_chan(struct keystone_dma_device *dma,
 	init_waitqueue_head(&chan->state_wait_queue);
 
 	INIT_LIST_HEAD(&chan->free_descs);
-	atomic_set(&chan->n_used_descs, 0);
 
 	chan->dma	= dma;
 	chan->direction	= DMA_NONE;
