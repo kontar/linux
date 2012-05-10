@@ -23,34 +23,12 @@
 #include <linux/wait.h>
 #include <linux/hwqueue.h>
 
-struct hwqueue_handle;
-
-struct hwqueue_stats {
-	atomic_t	 pushes;
-	atomic_t	 pops;
-};
-
-struct hwqueue_handle {
-	struct hwqueue		 queue;
-	unsigned		 flags;
-	struct hwqueue_instance	*inst;
-	struct list_head	 list;
-	void			*creator;
-	struct hwqueue_stats	 stats;
-	hwqueue_notify_fn	 notifier_fn;
-	void			*notifier_fn_arg;
-	atomic_t		 notifier_calls;
-	atomic_t		 notifier_enabled;
-	struct rcu_head		 rcu;
-};
-
 struct hwqueue_instance {
 	struct list_head	 handles;
 	struct hwqueue_device	*hdev;
 	struct timer_list	 poll_timer;
 	wait_queue_head_t	 wait;
 	void			*priv;
-	void			*creator;
 	char			 name[32];
 	atomic_t		 num_notifiers;
 };
@@ -121,19 +99,9 @@ static inline void *hwqueue_inst_to_priv(struct hwqueue_instance *inst)
 	return (void *)(inst + 1);
 }
 
-static inline struct hwqueue_handle *rcu_to_handle(struct rcu_head *rcu)
+static inline struct hwqueue *rcu_to_handle(struct rcu_head *rcu)
 {
-	return container_of(rcu, struct hwqueue_handle, rcu);
-}
-
-static inline struct hwqueue_handle *hwqueue_to_handle(struct hwqueue *q)
-{
-	return container_of(q, struct hwqueue_handle, queue);
-}
-
-static inline struct hwqueue *hwqueue_from_handle(struct hwqueue_handle *qh)
-{
-	return &qh->queue;
+	return container_of(rcu, struct hwqueue, rcu);
 }
 
 int hwqueue_device_register(struct hwqueue_device *dev);

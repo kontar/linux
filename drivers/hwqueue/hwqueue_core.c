@@ -53,7 +53,7 @@ static inline bool hwqueue_is_busy(struct hwqueue_instance *inst)
 
 static inline bool hwqueue_is_exclusive(struct hwqueue_instance *inst)
 {
-	struct hwqueue_handle *tmp;
+	struct hwqueue *tmp;
 
 	rcu_read_lock();
 
@@ -69,13 +69,13 @@ static inline bool hwqueue_is_exclusive(struct hwqueue_instance *inst)
 	return false;
 }
 
-static inline bool hwqueue_is_writable(struct hwqueue_handle *qh)
+static inline bool hwqueue_is_writable(struct hwqueue *qh)
 {
 	unsigned acc = qh->flags & O_ACCMODE;
 	return (acc == O_RDWR || acc == O_WRONLY);
 }
 
-static inline bool hwqueue_is_readable(struct hwqueue_handle *qh)
+static inline bool hwqueue_is_readable(struct hwqueue *qh)
 {
 	unsigned acc = qh->flags & O_ACCMODE;
 	return (acc == O_RDWR || acc == O_RDONLY);
@@ -178,13 +178,13 @@ static struct hwqueue *__hwqueue_open(struct hwqueue_instance *inst,
 				      void *caller)
 {
 	struct hwqueue_device *hdev = inst->hdev;
-	struct hwqueue_handle *qh;
+	struct hwqueue *qh;
 	int ret;
 
 	if (!try_module_get(hdev->dev->driver->owner))
 		return ERR_PTR(-ENODEV);
 
-	qh = kzalloc(sizeof(struct hwqueue_handle), GFP_KERNEL);
+	qh = kzalloc(sizeof(struct hwqueue), GFP_KERNEL);
 	if (!qh) {
 		module_put(hdev->dev->driver->owner);
 		return ERR_PTR(-ENOMEM);
@@ -192,12 +192,10 @@ static struct hwqueue *__hwqueue_open(struct hwqueue_instance *inst,
 
 	qh->flags = flags;
 	qh->inst = inst;
-	qh->creator = caller;
 
 	/* first opener? */
 	if (!hwqueue_is_busy(inst)) {
 		strncpy(inst->name, name, sizeof(inst->name));
-		inst->creator = caller;
 		ret = hdev->ops->open(inst, flags);
 		if (ret) {
 			kfree(qh);
@@ -206,9 +204,19 @@ static struct hwqueue *__hwqueue_open(struct hwqueue_instance *inst,
 		}
 	}
 
+	if (hwqueue_is_readable(qh)) {
+		qh->get_count	= hdev->ops->get_count;
+		qh->pop		= hdev->ops->pop;
+	}
+
+	if (hwqueue_is_writable(qh)) {
+		qh->flush	= hdev->ops->flush;
+		qh->push	= hdev->ops->push;
+	}
+
 	list_add_tail_rcu(&qh->list, &inst->handles);
 
-	return hwqueue_from_handle(qh);
+	return qh;
 }
 
 static struct hwqueue *hwqueue_open_by_id(const char *name, unsigned id,
@@ -397,16 +405,15 @@ EXPORT_SYMBOL(devm_hwqueue_open);
 
 /**
  * hwqueue_close() - close a hardware queue handle
- * @queue	- handle to close
+ * @qh	- handle to close
  */
-void hwqueue_close(struct hwqueue *queue)
+void hwqueue_close(struct hwqueue *qh)
 {
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
 	struct hwqueue_instance *inst = qh->inst;
 	struct hwqueue_device *hdev = inst->hdev;
 
 	while (atomic_read(&qh->notifier_enabled) > 0)
-		hwqueue_disable_notifier(queue);
+		hwqueue_disable_notifier(qh);
 
 	mutex_lock(&hwqueue_devices_lock);
 	list_del_rcu(&qh->list);
@@ -427,11 +434,11 @@ static int devm_hwqueue_match(struct device *dev, void *res, void *match_data)
 	return *(void **)res == match_data;
 }
 
-void devm_hwqueue_close(struct device *dev, struct hwqueue *queue)
+void devm_hwqueue_close(struct device *dev, struct hwqueue *qh)
 {
 	WARN_ON(devres_destroy(dev, devm_hwqueue_release, devm_hwqueue_match,
-			       (void *)queue));
-	hwqueue_close(queue);
+			       (void *)qh));
+	hwqueue_close(qh);
 }
 EXPORT_SYMBOL(devm_hwqueue_close);
 
@@ -439,13 +446,12 @@ EXPORT_SYMBOL(devm_hwqueue_close);
  * hwqueue_get_id() - get an ID number for an open queue.  This ID may be
  *		      passed to another part of the kernel, which then opens the
  *		      queue by ID.
- * @queue	- queue handle
+ * @qh	- queue handle
  *
  * Returns queue id (>= 0) on success, negative return value is an error.
  */
-int hwqueue_get_id(struct hwqueue *queue)
+int hwqueue_get_id(struct hwqueue *qh)
 {
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
 	struct hwqueue_instance *inst = qh->inst;
 	unsigned base_id = inst->hdev->base_id;
 
@@ -457,13 +463,12 @@ EXPORT_SYMBOL(hwqueue_get_id);
  * hwqueue_get_hw_id() - get an ID number for an open queue.  This ID may be
  *			 passed to hardware modules as a part of
  *			 descriptor/buffer content.
- * @queue	- queue handle
+ * @qh	- queue handle
  *
  * Returns queue id (>= 0) on success, negative return value is an error.
  */
-int hwqueue_get_hw_id(struct hwqueue *queue)
+int hwqueue_get_hw_id(struct hwqueue *qh)
 {
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
 	struct hwqueue_instance *inst = qh->inst;
 	struct hwqueue_device *hdev = inst->hdev;
 
@@ -476,13 +481,12 @@ EXPORT_SYMBOL(hwqueue_get_hw_id);
 
 /**
  * hwqueue_enable_notifier() - Enable notifier callback for a queue handle.
- * @queue	- hardware queue handle
+ * @qh	- hardware queue handle
  *
  * Returns 0 on success, errno otherwise.
  */
-int hwqueue_enable_notifier(struct hwqueue *queue)
+int hwqueue_enable_notifier(struct hwqueue *qh)
 {
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
 	struct hwqueue_instance *inst = qh->inst;
 	struct hwqueue_device *hdev = inst->hdev;
 	bool first;
@@ -509,13 +513,12 @@ EXPORT_SYMBOL(hwqueue_enable_notifier);
 
 /**
  * hwqueue_disable_notifier() - Disable notifier callback for a queue handle.
- * @queue	- hardware queue handle
+ * @qh	- hardware queue handle
  *
  * Returns 0 on success, errno otherwise.
  */
-int hwqueue_disable_notifier(struct hwqueue *queue)
+int hwqueue_disable_notifier(struct hwqueue *qh)
 {
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
 	struct hwqueue_instance *inst = qh->inst;
 	struct hwqueue_device *hdev = inst->hdev;
 	bool last;
@@ -539,7 +542,7 @@ EXPORT_SYMBOL(hwqueue_disable_notifier);
  * hwqueue_set_notifier() - Set a notifier callback to a queue handle.  This
  *			    notifier is called whenever the queue has
  *			    something to pop.
- * @queue	- hardware queue handle
+ * @qh	- hardware queue handle
  * @fn		- callback function
  * @fn_arg	- argument for the callback function
  *
@@ -551,91 +554,29 @@ EXPORT_SYMBOL(hwqueue_disable_notifier);
  *
  * Returns 0 on success, errno otherwise.
  */
-int hwqueue_set_notifier(struct hwqueue *queue, hwqueue_notify_fn fn,
+int hwqueue_set_notifier(struct hwqueue *qh, hwqueue_notify_fn fn,
 			 void *fn_arg)
 {
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
 	hwqueue_notify_fn old_fn = qh->notifier_fn;
 
 	if (!hwqueue_is_readable(qh))
 		return -EINVAL;
 
 	if (!fn && old_fn)
-		hwqueue_disable_notifier(queue);
+		hwqueue_disable_notifier(qh);
 
 	qh->notifier_fn = fn;
 	qh->notifier_fn_arg = fn_arg;
 
 	if (fn && !old_fn)
-		hwqueue_enable_notifier(queue);
+		hwqueue_enable_notifier(qh);
 
 	return 0;
 }
 EXPORT_SYMBOL(hwqueue_set_notifier);
 
-/**
- * hwqueue_get_count() - poll a hardware queue and check if empty
- *			 and return number of elements in a queue
- * @queue	- hardware queue handle
- *
- * Returns 'true' if empty, and 'false' otherwise
- */
-int hwqueue_get_count(struct hwqueue *queue)
-{
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
-	struct hwqueue_instance *inst = qh->inst;
-	struct hwqueue_device *hdev = inst->hdev;
-
-	if (unlikely(!hdev->ops->get_count || !hwqueue_is_readable(qh)))
-		return -EINVAL;
-
-	return hdev->ops->get_count(inst);
-}
-EXPORT_SYMBOL(hwqueue_get_count);
-
-/**
- * hwqueue_flush() - forcibly empty a queue if possible
- * @queue	- hardware queue handle
- *
- * Returns 0 on success, errno otherwise.  This may not be universally
- * supported on all hardware queue implementations.
- */
-int hwqueue_flush(struct hwqueue *queue)
-{
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
-	struct hwqueue_instance *inst = qh->inst;
-	struct hwqueue_device *hdev = inst->hdev;
-
-	if (unlikely(!hdev->ops->flush || !hwqueue_is_writable(qh)))
-		return -EPERM;
-	return hdev->ops->flush(inst);
-}
-EXPORT_SYMBOL(hwqueue_flush);
-
-/**
- * hwqueue_push() - push data (or descriptor) to the tail of a queue
- * @queue	- hardware queue handle
- * @data	- data to push
- * @size	- size of data to push
- *
- * Returns 0 on success, errno otherwise.
- */
-int hwqueue_push(struct hwqueue *queue, void *data, unsigned size)
-{
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
-	struct hwqueue_instance *inst = qh->inst;
-	struct hwqueue_device *hdev = inst->hdev;
-
-	if (unlikely(!hwqueue_is_writable(qh)))
-		return -EPERM;
-	atomic_inc(&qh->stats.pushes);
-	return hdev->ops->push(inst, data, size);
-}
-EXPORT_SYMBOL(hwqueue_push);
-
-static void *__hwqueue_pop_slow(struct hwqueue_instance *inst,
-				unsigned *size,
-				struct timeval *timeout)
+void *__hwqueue_pop_slow(struct hwqueue_instance *inst, unsigned *size,
+			 struct timeval *timeout)
 {
 	struct hwqueue_device *hdev = inst->hdev;
 	void *data = NULL;
@@ -663,39 +604,7 @@ static void *__hwqueue_pop_slow(struct hwqueue_instance *inst,
 
 	return data;
 }
-
-/**
- * hwqueue_pop() - pop data (or descriptor) from the head of a queue
- * @queue	- hardware queue handle
- * @size	- hwqueue_pop fills this parameter on success
- * @timeout	- timeout value to use if blocking
- *
- * Returns a data/descriptor pointer on success.  Use IS_ERR() to identify
- * error values on return.
- */
-void *hwqueue_pop(struct hwqueue *queue, unsigned *size,
-		  struct timeval *timeout)
-{
-	struct hwqueue_handle *qh = hwqueue_to_handle(queue);
-	struct hwqueue_instance *inst = qh->inst;
-	struct hwqueue_device *hdev = inst->hdev;
-	void *data;
-
-	if (unlikely(!hwqueue_is_readable(qh)))
-		return ERR_PTR(-EPERM);
-	atomic_inc(&qh->stats.pops);
-
-	data = hdev->ops->pop(inst, size);
-	if (likely(data))
-		return data;
-
-	if (likely((qh->flags & O_NONBLOCK) ||
-		   (timeout && !timeout->tv_sec && !timeout->tv_usec)))
-		return NULL;
-
-	return __hwqueue_pop_slow(inst, size, timeout);
-}
-EXPORT_SYMBOL(hwqueue_pop);
+EXPORT_SYMBOL(__hwqueue_pop_slow);
 
 /**
  * hwqueue_notify() - notify users on data availability
@@ -707,7 +616,7 @@ EXPORT_SYMBOL(hwqueue_pop);
  */
 void hwqueue_notify(struct hwqueue_instance *inst)
 {
-	struct hwqueue_handle *qh;
+	struct hwqueue *qh;
 
 	rcu_read_lock();
 
@@ -716,7 +625,7 @@ void hwqueue_notify(struct hwqueue_instance *inst)
 			continue;
 		if (WARN_ON(!qh->notifier_fn))
 			continue;
-		atomic_inc(&qh->notifier_calls);
+		atomic_inc(&qh->stats.notifies);
 		qh->notifier_fn(qh->notifier_fn_arg);
 	}
 
@@ -729,12 +638,12 @@ EXPORT_SYMBOL(hwqueue_notify);
 static void __hwqueue_poll(unsigned long data)
 {
 	struct hwqueue_instance *inst = (struct hwqueue_instance *)data;
-	struct hwqueue_handle *qh;
+	struct hwqueue *qh;
 
 	rcu_read_lock();
 
 	for_each_handle_rcu(qh, inst) {
-		if (hwqueue_get_count(hwqueue_from_handle(qh)) > 0)
+		if (hwqueue_get_count(qh) > 0)
 			hwqueue_notify(inst);
 		break;
 	}
@@ -763,29 +672,25 @@ static void hwqueue_debug_show_instance(struct seq_file *s,
 					struct hwqueue_instance *inst)
 {
 	struct hwqueue_device *hdev = inst->hdev;
-	struct hwqueue_handle *qh;
+	struct hwqueue *qh;
 
 	if (!hwqueue_is_busy(inst))
 		return;
 
-	seq_printf(s, "\tqueue id %d (%s), creator %pS\n",
-		   hdev->base_id + hwqueue_inst_to_id(inst), inst->name,
-		   inst->creator);
+	seq_printf(s, "\tqueue id %d (%s)\n",
+		   hdev->base_id + hwqueue_inst_to_id(inst), inst->name);
 
 	for_each_handle_rcu(qh, inst) {
-		struct hwqueue *queue = hwqueue_from_handle(qh);
-
-		seq_printf(s, "\t\thandle %p, qh %p, creator %pS\n",
-			   hwqueue_from_handle(qh), qh, qh->creator);
+		seq_printf(s, "\t\thandle %p\n", qh);
 		seq_printf(s, "\t\t\tpushes %d, pushfn %pS\n",
 			   atomic_read(&qh->stats.pushes), hdev->ops->push);
 		seq_printf(s, "\t\t\tpops %d, popfn %pS\n",
 			   atomic_read(&qh->stats.pops), hdev->ops->pop);
 		seq_printf(s, "\t\t\tcount %d, countfn %pS\n",
-			   hwqueue_get_count(queue), hdev->ops->get_count);
+			   hwqueue_get_count(qh), hdev->ops->get_count);
 		seq_printf(s, "\t\t\tnotifier fn %pS, fn_arg %p, calls %d\n",
 			   qh->notifier_fn, qh->notifier_fn_arg,
-			   atomic_read(&qh->notifier_calls));
+			   atomic_read(&qh->stats.notifies));
 	}
 }
 
