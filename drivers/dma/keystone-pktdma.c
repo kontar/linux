@@ -135,15 +135,6 @@ struct keystone_hw_desc {
 #define DESC_MAX_SIZE	offsetof(struct keystone_hw_desc, priv)
 #define DESC_MIN_SIZE	offsetof(struct keystone_hw_desc, psdata)
 
-enum keystone_desc_state {
-	DESC_STATE_INVALID,	/* invalid, no associated hw desc */
-	DESC_STATE_FREE,	/* free, may be allocated at prep */
-	DESC_STATE_USER_ALLOC,	/* inuse, alloced, not submitted  */
-	DESC_STATE_ACTIVE,	/* inuse, enqueued to dma hw      */
-	DESC_STATE_USER_RETURN,	/* inuse, user callback pending   */
-	__DESC_STATE_MAX,
-};
-
 enum keystone_chan_state {
 	/* stable states */
 	CHAN_STATE_OPENED,
@@ -157,7 +148,6 @@ enum keystone_chan_state {
 #define chan_state_is_transient(state) ((state) >= CHAN_STATE_OPENING)
 
 struct keystone_dma_desc {
-	atomic_t			 state;
 	unsigned			 free_next;
 	enum dma_status			 status;
 	unsigned long			 options;
@@ -319,7 +309,7 @@ static inline struct keystone_dma_desc *desc_get(struct keystone_dma_chan *chan)
 		next = desc_free_token(desc->free_next, token);
 		result = atomic_cmpxchg(&chan->free_first, first, next);
 		if (likely(result == first))
-			return desc;
+			break;
 		first = result;
 	}
 
@@ -330,6 +320,8 @@ static inline void desc_put(struct keystone_dma_chan *chan,
 			    struct keystone_dma_desc *desc)
 {
 	unsigned index, first, next, token, result;
+
+	desc->status = DMA_ERROR;
 
 	token = atomic_inc_return(&chan->free_token);
 	index = desc_to_index(chan, desc);
@@ -396,37 +388,6 @@ static inline void desc_copy(struct keystone_dma_chan *chan,
 		for (i = 0; i < words; i++)
 			*out++ = cpu_to_le32(*in++);
 	}
-}
-
-static const char *desc_state_str(enum keystone_desc_state state)
-{
-	static const char * const state_str[] = {
-		[DESC_STATE_INVALID]		= "invalid",
-		[DESC_STATE_FREE]		= "free",
-		[DESC_STATE_ACTIVE]		= "active",
-		[DESC_STATE_USER_ALLOC]		= "user-alloc",
-		[DESC_STATE_USER_RETURN]	= "user-return",
-	};
-
-	if (state < 0 || state >= ARRAY_SIZE(state_str))
-		return state_str[DESC_STATE_INVALID];
-	else
-		return state_str[state];
-}
-
-static enum keystone_desc_state desc_get_state(struct keystone_dma_desc *desc)
-{
-	return atomic_read(&desc->state);
-}
-
-static inline void desc_set_state(struct keystone_dma_chan *chan,
-				  struct keystone_dma_desc *desc,
-				  enum keystone_desc_state old,
-				  enum keystone_desc_state new)
-{
-	enum keystone_desc_state cur;
-	cur = atomic_cmpxchg(&desc->state, old, new);
-	WARN_ON(cur != old);
 }
 
 static const char *chan_state_str(enum keystone_chan_state state)
@@ -543,8 +504,7 @@ static void desc_dump(struct keystone_dma_chan *chan,
 {
 	struct keystone_hw_desc *hwdesc = desc_to_hwdesc(desc);
 
-	chan_vdbg(chan, "%s: state %s, desc %p\n", why,
-		  desc_state_str(desc_get_state(desc)), hwdesc);
+	chan_vdbg(chan, "%s: desc %p\n", why, hwdesc);
 	__hwdesc_dump(chan, hwdesc);
 }
 
@@ -616,8 +576,6 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 			  desc, hwdesc, hwqueue_get_id(queue));
 		hwdesc_dump(chan, hwdesc, "complete");
 
-		desc_set_state(chan, desc, DESC_STATE_ACTIVE, DESC_STATE_USER_RETURN);
-
 		sg = desc->sg;
 
 		if (unlikely(desc->options & DMA_HAS_EPIB)) {
@@ -657,7 +615,6 @@ static int chan_complete(struct keystone_dma_chan *chan, struct hwqueue *queue,
 		adesc = desc_to_adesc(desc);
 		adesc->callback(adesc->callback_param);
 
-		desc_set_state(chan, desc, DESC_STATE_USER_RETURN, DESC_STATE_FREE);
 		desc_put(chan, desc);
 
 		packets ++;
@@ -688,12 +645,11 @@ dma_cookie_t chan_submit(struct dma_async_tx_descriptor *adesc)
 	int ret;
 
 	if (unlikely(!chan_is_alive(chan))) {
-		desc_set_state(chan, desc, DESC_STATE_USER_ALLOC,
-			       DESC_STATE_FREE);
+		desc_put(chan, desc);
 		return -EINVAL;
 	}
 
-	desc_set_state(chan, desc, DESC_STATE_USER_ALLOC, DESC_STATE_ACTIVE);
+	desc->status = DMA_IN_PROGRESS;
 
 	hwdesc_dump(chan, hwdesc, "submit");
 	chan_vdbg(chan, "pushing desc %p to queue %d\n",
@@ -957,7 +913,6 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 
 	for (i = 0; i < chan->num_descs; i++) {
 		desc = desc_from_index(chan, i);
-		atomic_set(&desc->state, DESC_STATE_INVALID);
 
 		adesc = desc_to_adesc(desc);
 		adesc->cookie = desc_to_index(chan, desc);
@@ -978,8 +933,6 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 		memset(hwdesc, 0, desc->orig_size);
 		hwdesc->priv.desc = desc;
 
-		desc_set_state(chan, desc, DESC_STATE_INVALID, DESC_STATE_FREE);
-
 		desc_put(chan, desc);
 
 		ndesc++;
@@ -998,22 +951,26 @@ static int chan_setup_descs(struct keystone_dma_chan *chan)
 static void chan_destroy_descs(struct keystone_dma_chan *chan)
 {
 	struct keystone_dma_desc *desc;
+	bool leaked = false;
 	int i;
 
-	for (i = 0; i < chan->num_descs; i++) {
-		desc = desc_from_index(chan, i);
-		switch (desc_get_state(desc)) {
-		case DESC_STATE_FREE:
-			hwqueue_push(chan->q_pool, desc->hwdesc,
-				     desc->orig_size);
+	for (;;) {
+		desc = desc_get(chan);
+		if (!desc)
 			break;
-		default:
-			desc_dump(chan, desc, "leaked descriptor");
-			break;
-		}
+		hwqueue_push(chan->q_pool, desc->hwdesc, desc->orig_size);
+		desc->hwdesc = NULL;
 	}
 
-	kfree(chan->descs);
+	for (i = 0; i < chan->num_descs; i++) {
+		if (desc->hwdesc)
+			desc_dump(chan, desc, "leaked descriptor");
+		leaked = true;
+	}
+
+	if (!leaked)
+		kfree(chan->descs);
+
 	chan->descs = NULL;
 }
 
@@ -1244,18 +1201,7 @@ static enum dma_status chan_xfer_status(struct dma_chan *achan,
 	struct keystone_dma_desc *desc = desc_from_index(chan, cookie);
 	enum dma_status status;
 
-	switch (desc_get_state(desc)) {
-	case DESC_STATE_USER_RETURN:
-		status = desc->status;
-		break;
-	case DESC_STATE_ACTIVE:
-		status = DMA_IN_PROGRESS;
-		break;
-	default:
-		status = DMA_ERROR;
-		break;
-	}
-
+	status = desc ? desc->status : DMA_ERROR;
 	chan_vdbg(chan, "returning status %d for desc %p\n", status, desc);
 
 	return status;
@@ -1330,8 +1276,6 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 		chan_vdbg(chan, "out of descriptors\n");
 		return ERR_PTR(-ENOMEM);
 	}
-
-	desc_set_state(chan, desc, DESC_STATE_FREE, DESC_STATE_USER_ALLOC);
 
 	hwdesc = desc_to_hwdesc(desc);
 	prefetchw(hwdesc);
