@@ -81,7 +81,7 @@ static int __init hwqueue_test(void)
 
 	memset(&ctx, 0, sizeof(ctx));
 
-	qpool = hwqueue_open("pool-netcp", HWQUEUE_BYNAME, O_RDWR);
+	qpool = hwqueue_open("pool-net", HWQUEUE_BYNAME, O_RDWR);
 	if (IS_ERR_OR_NULL(qpool)) {
 		ret = PTR_ERR(qpool);
 		pr_err("failed to open pool queue, errno=%d\n", ret);
