@@ -341,21 +341,21 @@ static int khwq_push(struct hwqueue_instance *inst, void *data, unsigned size)
 	unsigned id = hwqueue_inst_to_id(inst);
 	struct khwq_region *region;
 	dma_addr_t dma;
-	u32 desc_size;
 	u32 val;
 
 	region = khwq_find_region_by_virt(kdev, kq, data);
 	if (!region)
 		return -EINVAL;
 
-	desc_size = min(size, region->desc_size);
+	size = min(size, region->desc_size);
+	size = ALIGN(size, SMP_CACHE_BYTES);
 	dma = region->dma_start + (data - region->virt_start);
 
 	if (WARN_ON(dma & DESC_SIZE_MASK))
 		return -EINVAL;
-	dma_sync_single_for_device(kdev->dev, dma, desc_size, DMA_TO_DEVICE);
+	dma_sync_single_for_device(kdev->dev, dma, size, DMA_TO_DEVICE);
 
-	val = (u32)dma | ((desc_size / 16) - 1);
+	val = (u32)dma | ((size / 16) - 1);
 
 	__raw_writel(val, &kdev->reg_push[id].ptr_size_thresh);
 
