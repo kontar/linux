@@ -133,7 +133,7 @@ struct keystone_hw_desc {
 } ____cacheline_aligned;
 
 #define DESC_MAX_SIZE	offsetof(struct keystone_hw_desc, priv)
-#define DESC_MIN_SIZE	offsetof(struct keystone_hw_desc, psdata)
+#define DESC_MIN_SIZE	offsetof(struct keystone_hw_desc, epib)
 
 enum keystone_chan_state {
 	/* stable states */
@@ -149,6 +149,7 @@ enum keystone_chan_state {
 
 struct keystone_dma_desc {
 	unsigned			 free_next;
+	unsigned			 size;
 	enum dma_status			 status;
 	unsigned long			 options;
 	unsigned			 sg_len;
@@ -223,12 +224,12 @@ struct keystone_dma_chan {
 #define chan_dbg(ch, format, arg...)				\
 	do {							\
 		if ((ch)->debug)				\
-		dev_dbg(chan_dev(ch), format, ##arg);	\
+			dev_dbg(chan_dev(ch), format, ##arg);	\
 	} while (0)
 #define chan_vdbg(ch, format, arg...)				\
 	do {							\
 		if ((ch)->debug)				\
-		dev_vdbg(chan_dev(ch), format, ##arg);	\
+			dev_vdbg(chan_dev(ch), format, ##arg);	\
 	} while (0)
 
 /**
@@ -655,7 +656,7 @@ dma_cookie_t chan_submit(struct dma_async_tx_descriptor *adesc)
 	chan_vdbg(chan, "pushing desc %p to queue %d\n",
 		  hwdesc, hwqueue_get_id(chan->q_submit));
 
-	ret = hwqueue_push(chan->q_submit, hwdesc, DESC_MAX_SIZE);
+	ret = hwqueue_push(chan->q_submit, hwdesc, desc->size);
 	if (unlikely(ret < 0))
 		return ret;
 	else
@@ -1293,6 +1294,7 @@ chan_prep_slave_sg(struct dma_chan *achan, struct scatterlist *_sg,
 	desc->options	= options;
 	desc->sg_len	= _num_sg;
 	desc->sg	= _sg;
+	desc->size	= DESC_MIN_SIZE + (epiblen + pslen) * 4;
 
 	adesc = desc_to_adesc(desc);
 	prefetchw(&adesc->callback);
