@@ -79,7 +79,6 @@ struct udma_chan {
 	struct dma_chan			*chan;
 	struct udma_request		*req;
 
-	unsigned			 last_req;
 	unsigned			 last_avail_idx;
 	enum dma_data_direction		 data_dir;
 	enum dma_transfer_direction	 xfer_dir;
@@ -305,9 +304,10 @@ udma_chan_create(struct udma_user *user, struct udma_chan_data *data)
 	void __user		*ring_user;
 	struct udma_chan	*chan;
 	struct udma_map		*map;
+	struct udma_request	*req;
 	void			*ring_virt;
 	unsigned long		 offset = 0;
-	int			 error;
+	int			 error, i;
 
 	ring_size = vring_size(data->num_desc, data->align);
 	if (ring_size != data->ring_size) {
@@ -355,6 +355,12 @@ udma_chan_create(struct udma_user *user, struct udma_chan_data *data)
 	chan->map  =  map;
 
 	vring_init(&chan->vring, data->num_desc, ring_virt, data->align);
+
+	for (i = 0, req = chan->req; i < data->num_desc; i++, req++) {
+		sg_init_table(req->sg, 1);
+		req->chan = chan;
+		req->desc = chan->vring.desc + i;
+	}
 
 	chan->xfer_dir = data->direction;
 
@@ -442,22 +448,20 @@ static void udma_chan_complete_cb(void *data)
 	udma_chan_complete(chan, req, status);
 }
 
-static int udma_chan_submit(struct udma_chan *chan, struct vring_desc *desc)
+static int udma_chan_submit(struct udma_chan *chan, __u16 idx)
 {
 	struct udma_user *user = chan->user;
-	void __user *buf_virt = (void __user *)(unsigned long)desc->addr;
-	unsigned long buf_size = desc->len;
 	struct vring *vring = &chan->vring;
-	struct udma_request *req;
+	struct vring_desc *desc = vring->desc + idx;
+	struct udma_request *req = chan->req + idx;
+	unsigned long buf_size = desc->len;
+	void __user *buf_virt;
 	struct udma_map *map;
 	unsigned long offset;
 	int segs;
 
-	req = chan->req + chan->last_req;
-	chan->last_req = (chan->last_req + 1) & (vring->num - 1);
+	buf_virt = (void __user *)(unsigned long)desc->addr;
 
-	req->chan	= chan;
-	req->desc	= desc;
 	req->dma_desc	= NULL;
 
 	map = udma_find_map(user, chan, buf_virt, buf_size, &offset);
@@ -467,7 +471,7 @@ static int udma_chan_submit(struct udma_chan *chan, struct vring_desc *desc)
 		return 0;
 	}
 
-	sg_init_one(req->sg, map->cpu_addr + offset, buf_size);
+	sg_set_buf(req->sg, map->cpu_addr + offset, buf_size);
 	segs = dma_map_sg(udma_chan_dev(chan), req->sg, 1,
 			  chan->data_dir);
 	if (unlikely(segs != 1)) {
@@ -494,15 +498,14 @@ static int udma_chan_submit(struct udma_chan *chan, struct vring_desc *desc)
 static void udma_chan_kick(struct udma_user *user, struct udma_chan *chan)
 {
 	struct vring *vring = &chan->vring;
-	struct vring_desc *desc;
-	__u16 idx;
+	__u16 idx, desc_idx;
 
 	dev_vdbg(udma_user_dev(user), "%s: kick begin: avail %d, used %d\n",
 		 udma_chan_name(chan), vring->avail->idx, vring->used->idx);
 
 	for (idx = chan->last_avail_idx; idx != vring->avail->idx; idx++) {
-		desc = vring->desc + vring->avail->ring[idx & (vring->num - 1)];
-		if (udma_chan_submit(chan, desc) < 0)
+		desc_idx = vring->avail->ring[idx & (vring->num - 1)];
+		if (udma_chan_submit(chan, desc_idx) < 0)
 			break;
 	}
 	chan->last_avail_idx = idx;
