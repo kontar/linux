@@ -344,7 +344,8 @@ static int khwq_push(struct hwqueue_instance *inst, void *data, unsigned size)
 	u32 val;
 
 	region = khwq_find_region_by_virt(kdev, kq, data);
-	if (!region)
+
+	if (unlikely(!region || size > region->desc_size))
 		return -EINVAL;
 
 	size = min(size, region->desc_size);
