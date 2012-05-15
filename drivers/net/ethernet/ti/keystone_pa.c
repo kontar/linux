@@ -779,8 +779,8 @@ static int pa_submit_packet(struct pa_packet *p_info)
 	if (ret < 0)
 		return ret;
 
-	p_info->desc = dma->device_prep_slave_sg(p_info->chan, p_info->sg, 3,
-						 p_info->direction, flags);
+	p_info->desc = dmaengine_prep_slave_sg(p_info->chan, p_info->sg, 3,
+					       p_info->direction, flags);
 	if (IS_ERR_OR_NULL(p_info->desc)) {
 		dma_unmap_sg(pa_dev->dev, p_info->sg, 3, p_info->direction);
 		return PTR_ERR(p_info->desc);
