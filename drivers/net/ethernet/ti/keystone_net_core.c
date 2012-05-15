@@ -382,9 +382,9 @@ static void netcp_refill_rx(struct netcp_priv *netcp, int packets)
 
 		device = netcp->rx_channel->device;
 
-		desc = device->device_prep_slave_sg(netcp->rx_channel,
-				p_info->sg, 3, DMA_DEV_TO_MEM,
-				DMA_HAS_EPIB | DMA_HAS_PSINFO);
+		desc = dmaengine_prep_slave_sg(netcp->rx_channel, p_info->sg,
+					       3, DMA_DEV_TO_MEM,
+					       DMA_HAS_EPIB | DMA_HAS_PSINFO);
 		if (IS_ERR_OR_NULL(desc)) {
 			dma_unmap_sg(netcp->dev, p_info->sg + 2, 1,
 				     DMA_FROM_DEVICE);
@@ -507,9 +507,9 @@ static int netcp_ndo_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 	device = netcp->tx_channel->device;
 
-	desc = device->device_prep_slave_sg(netcp->tx_channel,
-			p_info->sg, 3, DMA_MEM_TO_DEV,
-			DMA_HAS_EPIB | DMA_HAS_PSINFO);
+	desc = dmaengine_prep_slave_sg(netcp->tx_channel, p_info->sg, 3,
+				       DMA_MEM_TO_DEV,
+				       DMA_HAS_EPIB | DMA_HAS_PSINFO);
 
 	if (IS_ERR_OR_NULL(desc)) {
 		ndev->stats.tx_dropped++;
