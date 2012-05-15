@@ -480,8 +480,8 @@ static int udma_chan_submit(struct udma_chan *chan, __u16 idx)
 		return 0;
 	}
 
-	req->dma_desc = chan->chan->device->device_prep_slave_sg(chan->chan,
-				req->sg, 1, chan->xfer_dir, 0);
+	req->dma_desc = dmaengine_prep_slave_sg(chan->chan, req->sg, 1,
+						chan->xfer_dir, 0);
 	if (unlikely(IS_ERR(req->dma_desc))) {
 		dev_err(udma_user_dev(user), "failed to prep dma\n");
 		udma_chan_complete(chan, req, DMA_ERROR);
