@@ -291,8 +291,8 @@ static void veth_refill_rx(struct veth_priv *veth, int packets)
 
 		device = veth->rx_channel->device;
 
-		desc = device->device_prep_slave_sg(veth->rx_channel, p_info->sg, 1,
-						    DMA_DEV_TO_MEM, 0);
+		desc = dmaengine_prep_slave_sg(veth->rx_channel, p_info->sg, 1,
+					       DMA_DEV_TO_MEM, 0);
 		if (IS_ERR_OR_NULL(desc)) {
 			dma_unmap_sg(veth->dev, p_info->sg, 1, DMA_FROM_DEVICE);
 			dev_kfree_skb_any(skb);
@@ -397,8 +397,8 @@ static int veth_ndo_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 	device = veth->tx_channel->device;
 
-	desc = device->device_prep_slave_sg(veth->tx_channel,
-			p_info->sg, 1, DMA_MEM_TO_DEV, 0);
+	desc = dmaengine_prep_slave_sg(veth->tx_channel, p_info->sg, 1,
+				       DMA_MEM_TO_DEV, 0);
 
 	if (IS_ERR_OR_NULL(desc)) {
 		ndev->stats.tx_dropped++;
