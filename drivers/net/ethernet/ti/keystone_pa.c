@@ -35,6 +35,12 @@
 #include "keystone_pa.h"
 #include "keystone_pasahost.h"
 
+#define DEVICE_PA_PDSP02_FIRMWARE "keystone/pa_pdsp02_1_2_1_2.fw"
+#define DEVICE_PA_PDSP3_FIRMWARE "keystone/pa_pdsp3_1_2_1_2.fw"
+#define DEVICE_PA_PDSP45_FIRMWARE "keystone/pa_pdsp45_1_2_1_2.fw"
+
+#define PSTREAM_ROUTE_PDSP0	0
+
 #define PA_PDSP_ALREADY_ACTIVE	0
 #define PA_PDSP_RESET_RELEASED	1
 #define PA_PDSP_NO_RESTART	2
@@ -226,6 +232,7 @@ struct pa_device {
 	struct pa_statistics_regs   __iomem	*reg_stats;
 	void __iomem			*pa_sram;
 	void __iomem			*pa_iram;
+	void __iomem			*streaming_switch;
 };
 
 struct pa_device *p_dev;
@@ -1154,9 +1161,10 @@ int pa_open(struct netcp_module_data *data, const u8 *mac_addr)
 
 	clk_enable(pa_dev->clk);
 
-	streaming_switch_setup();
-
 	keystone_pa_reset(pa_dev);
+
+	/* Configure the streaming switch */
+	__raw_writel(PSTREAM_ROUTE_PDSP0, pa_dev->streaming_switch);
 
 	for (i = 0; i <= 5; i++) {
 		if (i <= 2)
@@ -1252,6 +1260,7 @@ int pa_remove(struct netcp_module_data *data)
 	devm_iounmap(dev, pa_dev->reg_stats);
 	devm_iounmap(dev, pa_dev->pa_iram);
 	devm_iounmap(dev, pa_dev->pa_sram);
+	devm_iounmap(dev, pa_dev->streaming_switch);
 
 	kfree(pa_dev);
 
@@ -1287,11 +1296,13 @@ static struct netcp_module_data *pa_probe(struct device *dev,
 	pa_dev->reg_stats	= devm_ioremap(dev, 0x2006000, 0x100);
 	pa_dev->pa_iram		= devm_ioremap(dev, 0x2010000, 0x30000);
 	pa_dev->pa_sram		= devm_ioremap(dev, 0x2040000, 0x8000);
+	pa_dev->streaming_switch	= devm_ioremap(dev, 0x02000604, 4);
 
 	if (!pa_dev->reg_mailbox || !pa_dev->reg_packet_id ||
 	    !pa_dev->reg_lut2 || !pa_dev->reg_control ||
 	    !pa_dev->reg_timer || !pa_dev->reg_stats ||
-	    !pa_dev->pa_sram || !pa_dev->pa_iram) {
+	    !pa_dev->pa_sram || !pa_dev->pa_iram ||
+	    !pa_dev->streaming_switch) {
 		dev_err(dev, "failed to set up register areas\n");
 		ret = -ENOMEM;
 		goto exit;

@@ -19,36 +19,7 @@
 #include <linux/if_ether.h>
 #include <linux/netdevice.h>
 
-#include "keystone_pa.h"
-
-#define DEVICE_PSTREAM_CFG_REG_ADDR             0x02000604
-#define DEVICE_PSTREAM_CFG_REG_VAL_ROUTE_PDSP0	0
-
-/*
- * Configure the streaming switch
- */
-static void inline streaming_switch_setup(void)
-{
-	void __iomem *stream;
-
-	stream = ioremap(DEVICE_PSTREAM_CFG_REG_ADDR, 4);
-
-	__raw_writel(DEVICE_PSTREAM_CFG_REG_VAL_ROUTE_PDSP0, stream);
-
-	iounmap(stream);
-}
-
-struct emac_config {
-	u8  enetaddr[6];
-};
-
 #define EFUSE_REG_MAC_ADDR	        0x2620110
-#define SRAM_SIZE			0x2000		
-#define SYS_TIMESTAMP_ADDR		0x6460
-#define SYS_TIMESTAMP_SRAM_INDEX	(SYS_TIMESTAMP_ADDR / SRAM_SIZE)
-#define SYS_TIMESTAMP_OFFSET		((SYS_TIMESTAMP_ADDR % \
-					  SRAM_SIZE)/sizeof(u32))
-#define PA_PDSP_SRAM(num)		((num) * 0x2000)
 
 /* Read the e-fuse value as 32 bit values to be endian independent */
 static int inline emac_arch_get_mac_addr(char *x)
@@ -71,10 +42,6 @@ static int inline emac_arch_get_mac_addr(char *x)
 
 	return 0;
 }
-
-#define DEVICE_PA_PDSP02_FIRMWARE "keystone/pa_pdsp02_1_2_1_2.fw"
-#define DEVICE_PA_PDSP3_FIRMWARE "keystone/pa_pdsp3_1_2_1_2.fw"
-#define DEVICE_PA_PDSP45_FIRMWARE "keystone/pa_pdsp45_1_2_1_2.fw"
 
 int evm_pa_ss_init(void);
 void keystone_set_ethtool_ops(struct net_device *ndev);
