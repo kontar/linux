@@ -352,7 +352,8 @@
 		};
 
 		netcp: netcp@2090000 {
-			reg = <0x2090000 0xf00>;
+			reg = <0x2090000 0xf00
+				0x2620110 0x8>;
 			compatible = "ti,keystone-netcp";
 
 			tx_channel = "nettx";
