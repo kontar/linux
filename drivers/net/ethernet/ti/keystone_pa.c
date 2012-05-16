@@ -1233,7 +1233,7 @@ int pa_open(struct netcp_module_data *data, const u8 *mac_addr)
 	dev_dbg(pa_dev->dev, "configuring command receive flow %d, queue %d\n",
 		pa_dev->cmd_flow_num, pa_dev->cmd_queue_num);
 
-	ret = keystone_pa_add_mac(pa_dev, NULL,       PACKET_HST,  0,      63);
+	ret = keystone_pa_add_mac(pa_dev, NULL,       PACKET_DROP,  0,      63);
 	ret = keystone_pa_add_mac(pa_dev, bcast_addr, PACKET_HST,  0,      62);
 	ret = keystone_pa_add_mac(pa_dev, mac_addr,   PACKET_HST,  0,      61);
 	ret = keystone_pa_add_mac(pa_dev, mac_addr,   PACKET_PARSE, 0x0800, 60);
