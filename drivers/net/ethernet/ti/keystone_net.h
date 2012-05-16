@@ -19,15 +19,12 @@
 #include <linux/if_ether.h>
 #include <linux/netdevice.h>
 
-#define EFUSE_REG_MAC_ADDR	        0x2620110
-
 /* Read the e-fuse value as 32 bit values to be endian independent */
-static int inline emac_arch_get_mac_addr(char *x)
+static int inline emac_arch_get_mac_addr(char *x,
+					 void __iomem *efuse_mac)
 {
-	void __iomem *efuse_mac;
 	unsigned int addr0, addr1;
 
-	efuse_mac = ioremap(EFUSE_REG_MAC_ADDR, 8);
 	addr1 = __raw_readl(efuse_mac + 4);
 	addr0 = __raw_readl(efuse_mac);
 
@@ -37,8 +34,6 @@ static int inline emac_arch_get_mac_addr(char *x)
 	x[3] = (addr0 & 0x00ff0000) >> 16;
 	x[4] = (addr0 & 0x0000ff00) >> 8;
 	x[5] = addr0 & 0x000000ff;
-
-	iounmap(efuse_mac);
 
 	return 0;
 }

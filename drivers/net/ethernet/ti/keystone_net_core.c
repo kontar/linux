@@ -28,6 +28,7 @@
 #include <linux/interrupt.h>
 #include <linux/dmaengine.h>
 #include <linux/net_tstamp.h>
+#include <linux/of_address.h>
 #include <linux/dma-mapping.h>
 #include <linux/scatterlist.h>
 #include <linux/etherdevice.h>
@@ -973,6 +974,9 @@ static int __devinit netcp_probe(struct platform_device *pdev)
 	struct netcp_module_data *module_data;
 	struct netcp_priv *netcp;
 	struct net_device *ndev;
+	resource_size_t size;
+	struct resource res;
+	void __iomem *efuse;
 	const char *name;
 	u8 mac_addr[6];
 	int ret = 0;
@@ -1000,6 +1004,27 @@ static int __devinit netcp_probe(struct platform_device *pdev)
 	netcp->rx_packet_max = netcp_rx_packet_max;
 	netcp_set_rx_state(netcp, RX_STATE_INVALID);
 
+	if (of_address_to_resource(node, 1, &res)) {
+		dev_err(&pdev->dev, "could not find resource\n");
+		ret = -ENODEV;
+		goto probe_quit;
+	}
+	size = resource_size(&res);
+
+	if (!devm_request_mem_region(&pdev->dev, res.start, size,
+				     dev_name(netcp->dev))) {
+		dev_err(&pdev->dev, "could not reserve resource\n");
+		ret = -ENOMEM;
+		goto probe_quit;
+	}
+
+	efuse = devm_ioremap_nocache(&pdev->dev, res.start, size);
+	if (!efuse) {
+		dev_err(&pdev->dev, "could not map resource\n");
+		ret = -ENOMEM;
+		goto probe_quit;
+	}
+
 	ret = of_property_read_string(node, "tx_channel", &netcp->tx_chan_name);
 	if (ret < 0)
 		netcp->tx_chan_name = "nettx";
@@ -1024,7 +1049,7 @@ static int __devinit netcp_probe(struct platform_device *pdev)
 		module_data->priv = netcp;
 	}
 
-	emac_arch_get_mac_addr(mac_addr);
+	emac_arch_get_mac_addr(mac_addr, efuse);
 
 	if (is_valid_ether_addr(mac_addr))
 		memcpy(ndev->dev_addr, mac_addr, ETH_ALEN);
