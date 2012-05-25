@@ -283,12 +283,12 @@ static void netcp_rx_complete(void *data)
 
 	BUG_ON(netcp->rx_state != RX_STATE_POLL);
 
+	netcp_dump_packet(p_info, "rx");
+
 	skb = p_info->skb;
 	p_info->skb = NULL;
 
 	netcp->ndev->last_rx = jiffies;
-
-	netcp_dump_packet(p_info, "rx");
 
 	skb_put(skb, len);
 
