@@ -659,7 +659,7 @@ void hwqueue_set_poll(struct hwqueue_instance *inst, bool enabled)
 	unsigned long expires;
 
 	if (!enabled) {
-		del_timer_sync(&inst->poll_timer);
+		del_timer(&inst->poll_timer);
 		return;
 	}
 
