@@ -19,10 +19,13 @@
 #include <linux/if_ether.h>
 #include <linux/netdevice.h>
 
+#define KEYSTONE_NET_SIMULATION
+
 /* Read the e-fuse value as 32 bit values to be endian independent */
 static int inline emac_arch_get_mac_addr(char *x,
 					 void __iomem *efuse_mac)
 {
+#ifndef KEYSTONE_NET_SIMULATION
 	unsigned int addr0, addr1;
 
 	addr1 = __raw_readl(efuse_mac + 4);
@@ -34,7 +37,14 @@ static int inline emac_arch_get_mac_addr(char *x,
 	x[3] = (addr0 & 0x00ff0000) >> 16;
 	x[4] = (addr0 & 0x0000ff00) >> 8;
 	x[5] = addr0 & 0x000000ff;
-
+#else
+	x[0] = 0x10;
+	x[1] = 0x11;
+	x[2] = 0x12;
+	x[3] = 0x13;
+	x[4] = 0x14;
+	x[5] = 0x15;
+#endif
 	return 0;
 }
 

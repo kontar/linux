@@ -640,7 +640,8 @@ static void keystone_adjust_link(struct net_device *ndev)
 	}
 	if (new_state) {
 		keystone_update_phystatus(netcp);
-		phy_print_status(netcp->phydev);
+		if (netcp->phydev)
+			phy_print_status(netcp->phydev);
 	}
 
 	spin_unlock_irqrestore(&netcp->lock, flags);

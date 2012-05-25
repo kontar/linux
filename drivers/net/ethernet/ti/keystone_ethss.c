@@ -37,7 +37,11 @@
 #define NETCP_DRIVER_VERSION	"v1.2.1"
 
 #define TCI6614_SS_BASE				0x02090000
+#ifndef KEYSTONE_NET_SIMULATION
 #define DEVICE_N_GMACSL_PORTS			2
+#else
+#define DEVICE_N_GMACSL_PORTS			1
+#endif
 #define DEVICE_EMACSL_RESET_POLL_COUNT		100
 
 #define DEVICE_RX_CDMA_TIMEOUT_COUNT		1000
@@ -52,6 +56,7 @@
 /* Maxlen register values */
 #define CPGMAC_REG_MAXLEN_LEN			0x3fff
 
+#define GMACSL_RX_ENABLE_CSF		(1 << 23)
 #define GMACSL_RX_ENABLE_EXT_CTL		(1 << 18)
 #define GMACSL_ENABLE				(1 <<  5)
 #define GMACSL_RET_OK				0
@@ -355,11 +360,42 @@ static int ethss_port_config(struct cpsw_priv *cpsw_dev, u16 port,
 	__raw_writel(max_rx_len,
 			&cpsw_dev->sliver_port_regs[port]->rx_maxlen);
 	
-	__raw_writel(GMACSL_ENABLE | GMACSL_RX_ENABLE_EXT_CTL,
+	__raw_writel(GMACSL_RX_ENABLE_CSF | GMACSL_ENABLE |
+				 GMACSL_RX_ENABLE_EXT_CTL,
 			&cpsw_dev->sliver_port_regs[port]->mac_control);
 
 	return ret;
 }
+
+#ifdef KEYSTONE_NET_SIMULATION
+int ethss_update_switch_addr(struct cpsw_priv *cpsw_dev, u8 *mac_addr, u32 port)
+{
+	u32 tmp, i;
+
+	for (i = 0; i < 1024; i++)
+	{
+		__raw_writel(i, &cpsw_dev->ale_reg->ale_tblctl);
+		tmp = __raw_readl(&cpsw_dev->ale_reg->ale_tblw1);
+		tmp = (tmp>>28) & 0x3;
+
+		if (tmp == 0)
+			break;
+	}
+
+	tmp = (mac_addr[2]<<24) | (mac_addr[3]<<16) |
+		(mac_addr[4]<<8) | (mac_addr[5]<<0);
+	__raw_writel(tmp, &cpsw_dev->ale_reg->ale_tblw0);
+
+	tmp = (mac_addr[0]<<8) | (mac_addr[1]<<0) | (1<<28);
+	__raw_writel(tmp, &cpsw_dev->ale_reg->ale_tblw1);
+
+	__raw_writel(port<<2, &cpsw_dev->ale_reg->ale_tblw2);
+
+	__raw_writel((1<<31)|i, &cpsw_dev->ale_reg->ale_tblctl);
+
+	return 0;
+}
+#endif
 
 static int ethss_stop(struct cpsw_priv *cpsw_dev)
 {
@@ -393,6 +429,19 @@ static int cpsw_configure(struct cpsw_priv *cpsw_dev)
 	for (i = 0; i < CPSW_NUM_PORTS; i++)
 		__raw_writel(CPSW_REG_VAL_PORTCTL_FORWARD_MODE,
 				&cpsw_dev->ale_reg->ale_portctl[i]);
+
+#ifdef KEYSTONE_NET_SIMULATION
+	u8 mac_addr[6];
+	u8 mac_addr_nic[6] = {0x5C, 0x26, 0x0A, 0x69, 0x44, 0x0B}; /* NIC addr */
+	u8 mac_addr_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; /* broadcast addr */
+
+	emac_arch_get_mac_addr(mac_addr, NULL);
+	ethss_update_switch_addr(cpsw_dev, mac_addr, 0);
+	ethss_update_switch_addr(cpsw_dev, mac_addr_nic, 1);
+	ethss_update_switch_addr(cpsw_dev, mac_addr, 1);
+	ethss_update_switch_addr(cpsw_dev, mac_addr_broadcast, 1);
+	ethss_update_switch_addr(cpsw_dev, mac_addr_broadcast, 0);
+#endif
 
 	for (i = 0; i < DEVICE_N_GMACSL_PORTS; i++)  {
 		ethss_port_reset(cpsw_dev, i);
@@ -519,8 +568,8 @@ void keystone_set_ethtool_ops(struct net_device *ndev)
 int cpsw_open(struct netcp_module_data *data, const u8 *mac_addr)
 {
 	struct cpsw_priv *cpsw_dev = cpsw_from_module(data);
-	void __iomem *regs;
 
+#ifndef KEYSTONE_NET_SIMULATION
 	cpsw_dev->cpgmac = clk_get(cpsw_dev->dev, "clk_cpgmac");
 	if (IS_ERR(cpsw_dev->cpgmac)) {
 		dev_err(cpsw_dev->dev, "unable to get Keystone CPGMAC clock\n");
@@ -528,7 +577,7 @@ int cpsw_open(struct netcp_module_data *data, const u8 *mac_addr)
 	}
 	else
 		clk_enable(cpsw_dev->cpgmac);
-
+#endif
 	ethss_stop(cpsw_dev);
 
 	evm_pa_ss_init();
@@ -544,11 +593,12 @@ int cpsw_close(struct netcp_module_data *data)
 
 	ethss_stop(cpsw_dev);
 
+#ifndef KEYSTONE_NET_SIMULATION
 	if (cpsw_dev->cpgmac) {
 		clk_disable(cpsw_dev->cpgmac);
 		clk_put(cpsw_dev->cpgmac);
 	}
-
+#endif
 	cpsw_dev->cpgmac = NULL;
 
 	return 0;

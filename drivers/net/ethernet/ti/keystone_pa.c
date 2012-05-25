@@ -1133,10 +1133,12 @@ int pa_close(struct netcp_module_data *data)
 		dma_release_channel(pa_dev->rx_channel);
 	pa_dev->rx_channel = NULL;
 
+#ifndef KEYSTONE_NET_SIMULATION
 	if (pa_dev->clk) {
 		clk_disable(pa_dev->clk);
 		clk_put(pa_dev->clk);
 	}
+#endif
 	pa_dev->clk = NULL;
 
 	return 0;
@@ -1152,6 +1154,7 @@ int pa_open(struct netcp_module_data *data, const u8 *mac_addr)
 	int i, factor;
 	int ret;
 
+#ifndef KEYSTONE_NET_SIMULATION
 	pa_dev->clk = clk_get(pa_dev->dev, "clk_pktproc");
 	if (IS_ERR_OR_NULL(pa_dev->clk)) {
 		dev_err(pa_dev->dev, "unable to get Packet Processor clock\n");
@@ -1160,7 +1163,7 @@ int pa_open(struct netcp_module_data *data, const u8 *mac_addr)
 	}
 
 	clk_enable(pa_dev->clk);
-
+#endif
 	keystone_pa_reset(pa_dev);
 
 	/* Configure the streaming switch */
