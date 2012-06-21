@@ -432,7 +432,8 @@ static int cpsw_configure(struct cpsw_priv *cpsw_dev)
 
 #ifdef KEYSTONE_NET_SIMULATION
 	u8 mac_addr[6];
-	u8 mac_addr_nic[6] = {0x5C, 0x26, 0x0A, 0x69, 0x44, 0x0B}; /* NIC addr */
+//	u8 mac_addr_nic[6] = {0xd0, 0x67, 0xe5, 0xe7, 0x33, 0x0c}; /* NIC addr */
+	u8 mac_addr_nic[6] = {0x5c, 0x26, 0x0a, 0x80, 0x0d, 0x43}; /* NIC addr */
 	u8 mac_addr_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; /* broadcast addr */
 
 	emac_arch_get_mac_addr(mac_addr, NULL);
