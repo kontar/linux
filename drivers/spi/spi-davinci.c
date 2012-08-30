@@ -950,7 +950,7 @@ static int __devinit davinci_spi_probe(struct platform_device *pdev)
 		ret = -ENODEV;
 		goto put_master;
 	}
-	clk_enable(dspi->clk);
+	clk_prepare_enable(dspi->clk);
 
 	master->dev.of_node = pdev->dev.of_node;
 	master->bus_num = pdev->id;
@@ -1040,7 +1040,7 @@ free_dma:
 	edma_free_channel(dspi->dma.rx_channel);
 	edma_free_slot(dspi->dma.dummy_param_slot);
 free_clk:
-	clk_disable(dspi->clk);
+	clk_disable_unprepare(dspi->clk);
 	clk_put(dspi->clk);
 #endif
 put_master:
@@ -1077,7 +1077,7 @@ static int __devexit davinci_spi_remove(struct platform_device *pdev)
 
 	spi_bitbang_stop(&dspi->bitbang);
 
-	clk_disable(dspi->clk);
+	clk_disable_unprepare(dspi->clk);
 	clk_put(dspi->clk);
 	spi_master_put(master);
 	free_irq(dspi->irq, dspi);
