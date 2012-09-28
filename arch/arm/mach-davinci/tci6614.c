@@ -15,10 +15,15 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
+#include <linux/clkdev.h>
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
+#include <linux/platform_data/clk-keystone-pll.h>
+#include <linux/platform_data/clk-davinci-psc.h>
+#include <linux/platform_data/davinci-clock.h>
 
 #include <asm/mach/map.h>
 
@@ -32,8 +37,8 @@
 #include <mach/hardware.h>
 #include <mach/cp_intd.h>
 #include <mach/tci6614.h>
+#include <mach/pll.h>
 
-#include "clock.h"
 #include "mux.h"
 
 /* Base addresses for on-chip devices */
@@ -50,12 +55,15 @@
 #define TCI6614_BOOT_CFG_DEVSTAT		(TCI6614_BOOT_CFG_BASE + 0x20)
 #define TCI6614_MAINPLL_CTL0			(TCI6614_BOOT_CFG_BASE + 0x328)
 #define TCI6614_PLLCTRL_PLLM			(TCI6614_PLL_BASE + 0x0110)
+#define TCI6614_PLLCTRL_SECCTL			(TCI6614_PLL_BASE + 0x0108)
 #define TCI6614_RSTMUX8				(TCI6614_BOOT_CFG_BASE + 0x0318)
 #define TCI6614_DEFAULT_IN_CLK			50000000
 #define MAINPLL_CTL0_PLLM_MASK			0x7F000
 #define MAINPLL_CTL0_PLLM_SHIFT			6
 #define MAINPLL_CTL0_PLLD_MASK			0x3f
 #define PLLCTRL_PLLM_MASK			0x3f
+#define PLLCTRL_SECCTL_BYPASS_SHIFT		23
+#define PLLCTRL_SECCTL_BYPASS_WIDTH		1
 #define RSTMUX8_OMODE_DEVICE_RESET		5
 #define RSTMUX8_OMODE_DEVICE_RESET_SHIFT	1
 #define RSTMUX8_OMODE_DEVICE_RESET_MASK		(BIT(1) | BIT(2) | BIT(3))
@@ -67,7 +75,7 @@ static u32 psc_regs[] = { TCI6614_PSC_BASE };
 /* Host map for interrupt controller */
 static u32 intc_host_map[] = { 0x01010000, 0x01010101, -1 };
 
-static unsigned long tci6614_ref_clk_recalc(struct clk *clk)
+static unsigned long tci6614_ref_clk_recalc(unsigned long parent_rate)
 {
 	void __iomem *devstat;
 	static unsigned long freq[] = { 50000000, 66666667, 80000000,
@@ -84,93 +92,105 @@ static unsigned long tci6614_ref_clk_recalc(struct clk *clk)
 	return freq[sel];
 }
 
-static unsigned long tci6614_main_pll_clk_recalc(struct clk *clk)
-{
-	unsigned long rate = 0;
-	u32  pllm, plld, postdiv = 2, val;
-	void __iomem *main_pll_ctl0, *pllctrl_pllm;
+static struct clk_fixed_rate_data ref_clk_data = {
+	.recalc	= tci6614_ref_clk_recalc,
+	.flags = CLK_IS_ROOT,
+};
 
-	main_pll_ctl0 = ioremap(TCI6614_MAINPLL_CTL0, 4);
-	if (WARN_ON(!main_pll_ctl0))
-		return rate;
-
-	pllctrl_pllm = ioremap(TCI6614_PLLCTRL_PLLM, 4);
-	if (WARN_ON(!pllctrl_pllm))
-		return rate;
-
-	/* get bit0-5 of PLLM from PLLM PLL control register */
-	val = (__raw_readl(pllctrl_pllm) & PLLCTRL_PLLM_MASK);
-	pllm = (val & PLLCTRL_PLLM_MASK);
-
-	/* bit6-12 of PLLM is in Main PLL control register */
-	val = __raw_readl(main_pll_ctl0);
-	pllm |= ((val & MAINPLL_CTL0_PLLM_MASK) >> MAINPLL_CTL0_PLLM_SHIFT);
-	plld = (val & MAINPLL_CTL0_PLLD_MASK);
-
-	rate = clk->parent->rate;
-
-	rate /= (plld + 1);
-	rate = (rate * (pllm + 1));
-	rate /= postdiv;
-
-	printk(KERN_NOTICE "main_pll_clk rate is %ld, postdiv = %d, pllm = %d, plld = %d\n",
-			rate, postdiv, pllm, plld);
-	iounmap(main_pll_ctl0);
-	iounmap(pllctrl_pllm);
-	return rate;
-}
-
-static struct clk ref_clk = {
+static struct davinci_clk ref_clk = {
 	.name		= "ref_clk",
-	.recalc		= tci6614_ref_clk_recalc,
+	.flags		= ALWAYS_ENABLED,
+	.type		= DAVINCI_FIXED_RATE_CLK,
+	.clk_data	=  {
+		.data	= &ref_clk_data,
+	},
+};
+
+static struct clk_keystone_pll_data main_pll_data = {
+	.phy_pllm		= TCI6614_PLLCTRL_PLLM,
+	.phy_main_pll_ctl0	= TCI6614_MAINPLL_CTL0,
+	.pllm_lower_mask	= PLLCTRL_PLLM_MASK,
+	.pllm_upper_mask	= MAINPLL_CTL0_PLLM_MASK,
+	.pllm_upper_shift	= MAINPLL_CTL0_PLLM_SHIFT,
+	.plld_mask		= MAINPLL_CTL0_PLLD_MASK,
+	.fixed_postdiv		= 2,
+};
+
+static struct davinci_clk main_pll = {
+	.name		= "main_pll",
+	.parent		= &ref_clk,
+	.type		= KEYSTONE_MAIN_PLL_CLK,
+	.clk_data = {
+		.data	= &main_pll_data,
+	},
 	.flags		= ALWAYS_ENABLED,
 };
 
-static struct pll_data main_pll_data = {
-	.num		= 1,
-	.div_ratio_mask = 0xff,
-	.phys_base	= TCI6614_PLL_BASE,
-	.flags		= PLL_HAS_PREDIV | PLL_HAS_POSTDIV,
+const char *main_pll_mux_parents[] = {"main_pll", "ref_clk"};
+
+struct clk_mux_data main_pll_mux_data = {
+	.shift		= PLLCTRL_SECCTL_BYPASS_SHIFT,
+	.width		= PLLCTRL_SECCTL_BYPASS_WIDTH,
+	.num_parents	= ARRAY_SIZE(main_pll_mux_parents),
+	.parents	= main_pll_mux_parents,
+	.phys_base	= TCI6614_PLLCTRL_SECCTL,
 };
 
-static struct clk main_pll = {
-	.name		= "main_pll",
-	.parent		= &ref_clk,
-	.recalc		= tci6614_main_pll_clk_recalc,
-	.pll_data	= &main_pll_data,
-	.flags		= CLK_PLL | ALWAYS_ENABLED,
+static struct davinci_clk main_pll_mux = {
+	.name		= "main_pll_mux",
+	.parent		= &main_pll,
+	.type		= DAVINCI_MUX_CLK,
+	.clk_data	= {
+		.data	= &main_pll_mux_data,
+	},
 };
 
-#define define_pll_div_clk(__pll, __div, __name)		\
-	static struct clk __name = {				\
+#define define_pll_div_clk(__pll, __div, __name)				\
+	static struct clk_divider_data pll_div_data##__div = {			\
+		.div_reg	= TCI6614_PLL_BASE + PLLDIV##__div,		\
+		.width		= 8,				\
+	};							\
+								\
+	static struct davinci_clk __name = {			\
 		.name		= #__name,			\
 		.parent		= &__pll,			\
-		.flags		= CLK_PLL | ALWAYS_ENABLED,	\
-		.div_reg	= PLLDIV##__div,		\
-	}
+		.flags		= ALWAYS_ENABLED,		\
+		.type		= DAVINCI_PRG_DIV_CLK,		\
+		.clk_data	= {				\
+			.data	=  &pll_div_data##__div,	\
+		},						\
+	};
 
-define_pll_div_clk(main_pll,  1, main_div_chip_clk1);
-define_pll_div_clk(main_pll,  2, main_div_gem_trace_clk);
-define_pll_div_clk(main_pll,  3, main_div_chip_clk2);
-define_pll_div_clk(main_pll,  4, main_div_chip_clk3);
-define_pll_div_clk(main_pll,  5, main_div_stm_clk);
-define_pll_div_clk(main_pll,  6, main_div_emif_ptv_clk);
-define_pll_div_clk(main_pll,  7, main_div_chip_clk6);
-define_pll_div_clk(main_pll,  8, main_div_slowsys_clk);
-define_pll_div_clk(main_pll,  9, main_div_chip_smreflex_clk);
-define_pll_div_clk(main_pll, 10, main_div_chip_clk3_srio);
-define_pll_div_clk(main_pll, 11, main_div_psc_clk6);
-define_pll_div_clk(main_pll, 12, main_div_chip_dftclk4);
-define_pll_div_clk(main_pll, 13, main_div_chip_dftclk8);
+define_pll_div_clk(main_pll_mux,  1, main_div_chip_clk1);
+define_pll_div_clk(main_pll_mux,  2, main_div_gem_trace_clk);
+define_pll_div_clk(main_pll_mux,  3, main_div_chip_clk2);
+define_pll_div_clk(main_pll_mux,  4, main_div_chip_clk3);
+define_pll_div_clk(main_pll_mux,  5, main_div_stm_clk);
+define_pll_div_clk(main_pll_mux,  6, main_div_emif_ptv_clk);
+define_pll_div_clk(main_pll_mux,  7, main_div_chip_clk6);
+define_pll_div_clk(main_pll_mux,  8, main_div_slowsys_clk);
+define_pll_div_clk(main_pll_mux,  9, main_div_chip_smreflex_clk);
+define_pll_div_clk(main_pll_mux, 10, main_div_chip_clk3_srio);
+define_pll_div_clk(main_pll_mux, 11, main_div_psc_clk6);
+define_pll_div_clk(main_pll_mux, 12, main_div_chip_dftclk4);
+define_pll_div_clk(main_pll_mux, 13, main_div_chip_dftclk8);
 
 #define __lpsc_clk(cname, _parent, mod, flg, dom)	\
-	static struct clk clk_##cname = {		\
-		.name		= #cname,		\
-		.parent		= &_parent,		\
-		.lpsc		= TCI6614_LPSC_##mod,	\
-		.flags		= flg,			\
-		.domain		= TCI6614_PD_##dom,	\
-	}
+	static struct clk_davinci_psc_data clk_psc_data##cname = {	\
+		.domain	= TCI6614_PD_##dom,			\
+		.lpsc	= TCI6614_LPSC_##mod,			\
+		.flags  = CLK_IGNORE_UNUSED,			\
+	};							\
+								\
+	static struct davinci_clk clk_##cname = {		\
+		.name		= #cname,			\
+		.parent		= &_parent,			\
+		.flags		= flg,				\
+		.type		= DAVINCI_PSC_CLK,		\
+		.clk_data	= {				\
+			.data	= &clk_psc_data##cname		\
+		},						\
+	};
 
 #define lpsc_clk_enabled(cname, parent, mod)		\
 	__lpsc_clk(cname, parent, mod, ALWAYS_ENABLED, ALWAYSON)
@@ -206,6 +226,7 @@ lpsc_clk(vcp2_a,			main_div_chip_clk3, VCP2_A, ALWAYSON);
 lpsc_clk(debugss_trc,			main_div_chip_clk3, DEBUGSS_TRC, DEBUG_TRC);
 lpsc_clk(tetb_trc,			main_div_chip_clk3, TETB_TRC, DEBUG_TRC);
 lpsc_clk(pktproc,			main_div_chip_clk3, PKTPROC, PASS);
+lpsc_clk(ethss,				clk_pktproc, CPGMAC, PASS);
 lpsc_clk(crypto,			main_div_chip_clk1, CRYPTO, PASS);
 lpsc_clk(pciex,				main_div_chip_clk2, PCIEX, PCIEX);
 lpsc_clk(srio,				main_div_chip_clk3_srio, SRIO, SRIO);
@@ -226,31 +247,38 @@ lpsc_clk(gem2,				main_div_chip_clk1, GEM2, GEM2);
 lpsc_clk(rsax2_0,			main_div_chip_clk1, RSAX2_0, GEM2);
 lpsc_clk(gem3,				main_div_chip_clk1, GEM3, GEM3);
 lpsc_clk(tcp3d_b,			main_div_chip_clk2, TCP3D_B, TCP3D_B);
-lpsc_clk(ethss,				clk_pktproc, CPGMAC, PASS);
 
-static struct clk clk_cpgmac = {
-	.parent		= &clk_ethss,
+struct clk_lookup pkt_proc_lookups[] = {
+	{ .dev_id = "2090000.netcp", .con_id = "clk_pa", },
+	{ .dev_id = "2004000.pktdma", },
 };
 
-static struct clk clk_mdio = {
-	.parent		= &clk_ethss,
+struct clk_lookup ethss_lookups[] = {
+	{ .dev_id = "2090000.netcp", .con_id = "clk_cpgmac", },
+	{ .dev_id = "2090300.mdio", "fck", },
+	{ .dev_id = "2090300.mdio", },
 };
 
-static struct clk clk_mdio_fck = {
-	.parent		= &clk_mdio,
+static struct davinci_dev_lookup dev_clk_lookups[] = {
+	{
+		.con_id		= "clk_pktproc",
+		.num_devs	= ARRAY_SIZE(pkt_proc_lookups),
+		.lookups	= pkt_proc_lookups,
+	},
+	{
+		.con_id		= "clk_ethss",
+		.num_devs	= ARRAY_SIZE(ethss_lookups),
+		.lookups	= ethss_lookups,
+	},
+	{
+		.con_id		= NULL,
+	},
 };
 
-static struct clk clk_pa = {
-	.parent		= &clk_pktproc,
-};
-
-static struct clk clk_pa_pktdma = {
-	.parent		= &clk_pktproc,
-};
-
-static struct clk_lookup clks[] = {
+static struct davinci_clk_lookup clks[] = {
 	CLK(NULL, "ref_clk",			&ref_clk),
 	CLK(NULL, "main_pll",			&main_pll),
+	CLK(NULL, "main_pll_mux",		&main_pll_mux),
 
 	CLK(NULL, "main_div_chip_clk1",		&main_div_chip_clk1),
 	CLK(NULL, "main_div_gem_trace_clk",	&main_div_gem_trace_clk),
@@ -274,13 +302,8 @@ static struct clk_lookup clks[] = {
 	CLK(NULL,		"clk_debugss_trc",	&clk_debugss_trc),
 	CLK(NULL,		"clk_tetb_trc",		&clk_tetb_trc),
 	CLK(NULL,		"clk_pktproc",		&clk_pktproc),
-	CLK("2004000.pktdma",	NULL,			&clk_pa_pktdma),
-	CLK("2090000.netcp",	"clk_pa",		&clk_pa),
 	CLK("2090000.netcp",	"clk_ethss",		&clk_ethss),
-	CLK("2090000.netcp",	"clk_cpgmac",		&clk_cpgmac),
 	CLK("20c0000.crypto",	NULL,			&clk_crypto),
-	CLK("2090300.mdio",	NULL,			&clk_mdio),
-	CLK("2090300.mdio",	"fck",			&clk_mdio_fck),
 	CLK(NULL,		"clk_pciex",		&clk_pciex),
 	CLK(NULL,		"clk_srio",		&clk_srio),
 	CLK(NULL,		"clk_bcp",		&clk_bcp),
@@ -466,6 +489,7 @@ static struct davinci_soc_info tci6614_soc_info = {
 	.ids_num		= ARRAY_SIZE(ids),
 	.jtag_id_reg		= TCI6614_BOOT_CFG_BASE + 0x18,
 	.cpu_clks		= clks,
+	.dev_clk_lookups	= dev_clk_lookups,
 	.psc_bases		= psc_regs,
 	.psc_bases_num		= ARRAY_SIZE(psc_regs),
 	.intc_type		= DAVINCI_INTC_TYPE_OMAP_AINTC,

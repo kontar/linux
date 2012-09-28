@@ -26,8 +26,7 @@
 #include <mach/irqs.h>
 #include <mach/edma.h>
 #include <mach/tci6614.h>
-
-#include "clock.h"
+#include <mach/time.h>
 
 /* Base addresses for on-chip devices */
 #define TCI6614_TPCC_BASE			0x01c00000

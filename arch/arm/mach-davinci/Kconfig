@@ -78,6 +78,8 @@ config ARCH_DAVINCI_TCI6614
 	select CP_INTD
 	select TI_KEYSTONE
 	select USE_OF
+	select DAVINCI_CLKS
+	select CLK_KEYSTONE_PLL
 	bool "TCI6614 based system"
 
 comment "DaVinci Board Type"
