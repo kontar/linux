@@ -44,287 +44,38 @@
 /* Base addresses for on-chip devices */
 #define TCI6614_TIMER7_BASE			0x02270000
 #define TCI6614_TIMER8_BASE			0x02280000
-#define TCI6614_PLL_BASE			0x02310000
 #define TCI6614_GPIO_BASE			0x02320000
-#define TCI6614_PSC_BASE			0x02350000
 #define TCI6614_CPINTC_BASE			0x0260c000
 #define TCI6614_CPINTD_BASE			0x02610000
 #define TCI6614_BOOT_CFG_BASE			0x02620000
 #define TCI6614_AINTC_BASE			0x48200000
 
-#define TCI6614_BOOT_CFG_DEVSTAT		(TCI6614_BOOT_CFG_BASE + 0x20)
-#define TCI6614_MAINPLL_CTL0			(TCI6614_BOOT_CFG_BASE + 0x328)
-#define TCI6614_PLLCTRL_PLLM			(TCI6614_PLL_BASE + 0x0110)
-#define TCI6614_PLLCTRL_SECCTL			(TCI6614_PLL_BASE + 0x0108)
 #define TCI6614_RSTMUX8				(TCI6614_BOOT_CFG_BASE + 0x0318)
-#define TCI6614_DEFAULT_IN_CLK			50000000
-#define MAINPLL_CTL0_PLLM_MASK			0x7F000
-#define MAINPLL_CTL0_PLLM_SHIFT			6
-#define MAINPLL_CTL0_PLLD_MASK			0x3f
-#define PLLCTRL_PLLM_MASK			0x3f
-#define PLLCTRL_SECCTL_BYPASS_SHIFT		23
-#define PLLCTRL_SECCTL_BYPASS_WIDTH		1
 #define RSTMUX8_OMODE_DEVICE_RESET		5
 #define RSTMUX8_OMODE_DEVICE_RESET_SHIFT	1
 #define RSTMUX8_OMODE_DEVICE_RESET_MASK		(BIT(1) | BIT(2) | BIT(3))
 #define RSTMUX8_LOCK_MASK			BIT(0)
 
-/* PSC control registers */
-static u32 psc_regs[] = { TCI6614_PSC_BASE };
-
 /* Host map for interrupt controller */
 static u32 intc_host_map[] = { 0x01010000, 0x01010101, -1 };
 
-static unsigned long tci6614_ref_clk_recalc(unsigned long parent_rate)
-{
-	void __iomem *devstat;
-	static unsigned long freq[] = { 50000000, 66666667, 80000000,
-					100000000, 156250000, 250000000,
-					312500000, 122880000 };
-	int sel;
-
-	devstat = ioremap(TCI6614_BOOT_CFG_DEVSTAT, 4);
-	if (WARN_ON(!devstat))
-		return TCI6614_DEFAULT_IN_CLK;
-	sel = (__raw_readl(devstat) >> 11) & 0x7;
-
-	iounmap(devstat);
-	return freq[sel];
-}
-
-static struct clk_fixed_rate_data ref_clk_data = {
-	.recalc	= tci6614_ref_clk_recalc,
-	.flags = CLK_IS_ROOT,
-};
-
-static struct davinci_clk ref_clk = {
-	.name		= "ref_clk",
-	.flags		= ALWAYS_ENABLED,
-	.type		= DAVINCI_FIXED_RATE_CLK,
-	.clk_data	=  {
-		.data	= &ref_clk_data,
-	},
-};
-
-static struct clk_keystone_pll_data main_pll_data = {
-	.phy_pllm		= TCI6614_PLLCTRL_PLLM,
-	.phy_main_pll_ctl0	= TCI6614_MAINPLL_CTL0,
-	.pllm_lower_mask	= PLLCTRL_PLLM_MASK,
-	.pllm_upper_mask	= MAINPLL_CTL0_PLLM_MASK,
-	.pllm_upper_shift	= MAINPLL_CTL0_PLLM_SHIFT,
-	.plld_mask		= MAINPLL_CTL0_PLLD_MASK,
-	.fixed_postdiv		= 2,
-};
-
-static struct davinci_clk main_pll = {
-	.name		= "main_pll",
-	.parent		= &ref_clk,
-	.type		= KEYSTONE_MAIN_PLL_CLK,
-	.clk_data = {
-		.data	= &main_pll_data,
-	},
-	.flags		= ALWAYS_ENABLED,
-};
-
-const char *main_pll_mux_parents[] = {"main_pll", "ref_clk"};
-
-struct clk_mux_data main_pll_mux_data = {
-	.shift		= PLLCTRL_SECCTL_BYPASS_SHIFT,
-	.width		= PLLCTRL_SECCTL_BYPASS_WIDTH,
-	.num_parents	= ARRAY_SIZE(main_pll_mux_parents),
-	.parents	= main_pll_mux_parents,
-	.phys_base	= TCI6614_PLLCTRL_SECCTL,
-};
-
-static struct davinci_clk main_pll_mux = {
-	.name		= "main_pll_mux",
-	.parent		= &main_pll,
-	.type		= DAVINCI_MUX_CLK,
-	.clk_data	= {
-		.data	= &main_pll_mux_data,
-	},
-};
-
-#define define_pll_div_clk(__pll, __div, __name)				\
-	static struct clk_divider_data pll_div_data##__div = {			\
-		.div_reg	= TCI6614_PLL_BASE + PLLDIV##__div,		\
-		.width		= 8,				\
-	};							\
-								\
-	static struct davinci_clk __name = {			\
-		.name		= #__name,			\
-		.parent		= &__pll,			\
-		.flags		= ALWAYS_ENABLED,		\
-		.type		= DAVINCI_PRG_DIV_CLK,		\
-		.clk_data	= {				\
-			.data	=  &pll_div_data##__div,	\
-		},						\
-	};
-
-define_pll_div_clk(main_pll_mux,  1, main_div_chip_clk1);
-define_pll_div_clk(main_pll_mux,  2, main_div_gem_trace_clk);
-define_pll_div_clk(main_pll_mux,  3, main_div_chip_clk2);
-define_pll_div_clk(main_pll_mux,  4, main_div_chip_clk3);
-define_pll_div_clk(main_pll_mux,  5, main_div_stm_clk);
-define_pll_div_clk(main_pll_mux,  6, main_div_emif_ptv_clk);
-define_pll_div_clk(main_pll_mux,  7, main_div_chip_clk6);
-define_pll_div_clk(main_pll_mux,  8, main_div_slowsys_clk);
-define_pll_div_clk(main_pll_mux,  9, main_div_chip_smreflex_clk);
-define_pll_div_clk(main_pll_mux, 10, main_div_chip_clk3_srio);
-define_pll_div_clk(main_pll_mux, 11, main_div_psc_clk6);
-define_pll_div_clk(main_pll_mux, 12, main_div_chip_dftclk4);
-define_pll_div_clk(main_pll_mux, 13, main_div_chip_dftclk8);
-
-#define __lpsc_clk(cname, _parent, mod, flg, dom)	\
-	static struct clk_davinci_psc_data clk_psc_data##cname = {	\
-		.domain	= TCI6614_PD_##dom,			\
-		.lpsc	= TCI6614_LPSC_##mod,			\
-		.flags  = CLK_IGNORE_UNUSED,			\
-	};							\
+#define lpsc_clk(cname)	\
 								\
 	static struct davinci_clk clk_##cname = {		\
 		.name		= #cname,			\
-		.parent		= &_parent,			\
-		.flags		= flg,				\
-		.type		= DAVINCI_PSC_CLK,		\
-		.clk_data	= {				\
-			.data	= &clk_psc_data##cname		\
-		},						\
 	};
 
-#define lpsc_clk_enabled(cname, parent, mod)		\
-	__lpsc_clk(cname, parent, mod, ALWAYS_ENABLED, ALWAYSON)
-
-#define lpsc_clk(cname, parent, mod, dom)		\
-	__lpsc_clk(cname, parent, mod, 0, dom)
-
-
-/* Alawys on domains */
-lpsc_clk_enabled(modrst0,		main_div_chip_clk6, MODRST0);
-lpsc_clk_enabled(src3_pwr,		main_div_chip_smreflex_clk, SRC3_PWR);
-lpsc_clk_enabled(emif4f,		main_div_chip_clk1, EMIF4F);
-lpsc_clk_enabled(monza_rst_ctrl,	main_div_chip_clk1, MONZA_RST_CTRL);
-
-/* There are 2 more clocks coming to some of the modules below and only
- * one of the clock is mentioned as parent clock. Assume they are
- * automatically enabled by gpsc
- */
-lpsc_clk_enabled(timer0,		clk_modrst0, MODRST0);
-lpsc_clk_enabled(timer1,		clk_modrst0, MODRST0);
-lpsc_clk_enabled(uart0,			clk_modrst0, MODRST0);
-lpsc_clk_enabled(uart1,			clk_modrst0, MODRST0);
-lpsc_clk_enabled(aemif,			clk_modrst0, MODRST0);
-lpsc_clk_enabled(usim,			clk_modrst0, MODRST0);
-lpsc_clk_enabled(i2c,			clk_modrst0, MODRST0);
-lpsc_clk_enabled(spi,			clk_modrst0, MODRST0);
-lpsc_clk_enabled(gpio,			clk_modrst0, MODRST0);
-lpsc_clk_enabled(key_mgr,		clk_modrst0, MODRST0);
-
-/* SW controlled domains */
-lpsc_clk(vusr,				main_div_chip_clk2, VUSR, ALWAYSON);
-lpsc_clk(vcp2_a,			main_div_chip_clk3, VCP2_A, ALWAYSON);
-lpsc_clk(debugss_trc,			main_div_chip_clk3, DEBUGSS_TRC, DEBUG_TRC);
-lpsc_clk(tetb_trc,			main_div_chip_clk3, TETB_TRC, DEBUG_TRC);
-lpsc_clk(pktproc,			main_div_chip_clk3, PKTPROC, PASS);
-lpsc_clk(ethss,				clk_pktproc, CPGMAC, PASS);
-lpsc_clk(crypto,			main_div_chip_clk1, CRYPTO, PASS);
-lpsc_clk(pciex,				main_div_chip_clk2, PCIEX, PCIEX);
-lpsc_clk(srio,				main_div_chip_clk3_srio, SRIO, SRIO);
-lpsc_clk(bcp,				main_div_chip_clk3, BCP,  BCP);
-lpsc_clk(msmcsram,			main_div_chip_clk2, MSMCSRAM, MSMCSRAM);
-lpsc_clk(rac,				main_div_chip_clk1, RAC, RAC_TAC);
-lpsc_clk(tac,				main_div_chip_clk3, TAC, RAC_TAC);
-lpsc_clk(fftc,				main_div_chip_clk3, FFTC, FFTC);
-lpsc_clk(aif2,				main_div_chip_clk3, AIF2, AIF2);
-lpsc_clk(tcp3d,				main_div_chip_clk2, TCP3D, TCP3D);
-lpsc_clk(vcp2_b,			main_div_chip_clk3, VCP2_B, VCP_BCD);
-lpsc_clk(vcp2_c,			main_div_chip_clk3, VCP2_C, VCP_BCD);
-lpsc_clk(vcp2_d,			main_div_chip_clk3, VCP2_D, VCP_BCD);
-lpsc_clk(gem0,				main_div_chip_clk1, GEM0, GEM0);
-lpsc_clk(gem1,				main_div_chip_clk1, GEM1, GEM1);
-lpsc_clk(rsax2_1,			main_div_chip_clk1, RSAX2_1, GEM1);
-lpsc_clk(gem2,				main_div_chip_clk1, GEM2, GEM2);
-lpsc_clk(rsax2_0,			main_div_chip_clk1, RSAX2_0, GEM2);
-lpsc_clk(gem3,				main_div_chip_clk1, GEM3, GEM3);
-lpsc_clk(tcp3d_b,			main_div_chip_clk2, TCP3D_B, TCP3D_B);
-
-struct clk_lookup pkt_proc_lookups[] = {
-	{ .dev_id = "2090000.netcp", .con_id = "clk_pa", },
-	{ .dev_id = "2004000.pktdma", },
-};
-
-struct clk_lookup ethss_lookups[] = {
-	{ .dev_id = "2090000.netcp", .con_id = "clk_cpgmac", },
-	{ .dev_id = "2090300.mdio", "fck", },
-	{ .dev_id = "2090300.mdio", },
-};
-
-static struct davinci_dev_lookup dev_clk_lookups[] = {
-	{
-		.con_id		= "clk_pktproc",
-		.num_devs	= ARRAY_SIZE(pkt_proc_lookups),
-		.lookups	= pkt_proc_lookups,
-	},
-	{
-		.con_id		= "clk_ethss",
-		.num_devs	= ARRAY_SIZE(ethss_lookups),
-		.lookups	= ethss_lookups,
-	},
-	{
-		.con_id		= NULL,
-	},
-};
+lpsc_clk(timer0);
+lpsc_clk(timer1);
+lpsc_clk(uart0);
+lpsc_clk(uart1);
+lpsc_clk(aemif);
+lpsc_clk(usim);
+lpsc_clk(i2c);
+lpsc_clk(spi);
+lpsc_clk(gpio);
 
 static struct davinci_clk_lookup clks[] = {
-	CLK(NULL, "ref_clk",			&ref_clk),
-	CLK(NULL, "main_pll",			&main_pll),
-	CLK(NULL, "main_pll_mux",		&main_pll_mux),
-
-	CLK(NULL, "main_div_chip_clk1",		&main_div_chip_clk1),
-	CLK(NULL, "main_div_gem_trace_clk",	&main_div_gem_trace_clk),
-	CLK(NULL, "main_div_chip_clk2",		&main_div_chip_clk2),
-	CLK(NULL, "main_div_chip_clk3",		&main_div_chip_clk3),
-	CLK(NULL, "main_div_stm_clk",		&main_div_stm_clk),
-	CLK(NULL, "main_div_emif_ptv_clk",	&main_div_emif_ptv_clk),
-	CLK(NULL, "main_div_chip_clk6",		&main_div_chip_clk6),
-	CLK(NULL, "main_div_slowsys_clk",	&main_div_slowsys_clk),
-	CLK(NULL, "main_div_chip_smreflex_clk",	&main_div_chip_smreflex_clk),
-	CLK(NULL, "main_div_chip_clk3_srio",	&main_div_chip_clk3_srio),
-	CLK(NULL, "main_div_psc_clk6",		&main_div_psc_clk6),
-	CLK(NULL, "main_div_chip_dftclk4",	&main_div_chip_dftclk4),
-	CLK(NULL, "main_div_chip_dftclk8",	&main_div_chip_dftclk8),
-
-	CLK(NULL,		"clk_modrst0",		&clk_modrst0),
-	CLK(NULL,		"clk_src3_pwr",		&clk_src3_pwr),
-	CLK(NULL,		"clk_emif4f",		&clk_emif4f),
-	CLK(NULL,		"clk_vusr",		&clk_vusr),
-	CLK(NULL,		"clk_vcp2_a",		&clk_vcp2_a),
-	CLK(NULL,		"clk_debugss_trc",	&clk_debugss_trc),
-	CLK(NULL,		"clk_tetb_trc",		&clk_tetb_trc),
-	CLK(NULL,		"clk_pktproc",		&clk_pktproc),
-	CLK("2090000.netcp",	"clk_ethss",		&clk_ethss),
-	CLK("20c0000.crypto",	NULL,			&clk_crypto),
-	CLK(NULL,		"clk_pciex",		&clk_pciex),
-	CLK(NULL,		"clk_srio",		&clk_srio),
-	CLK(NULL,		"clk_bcp",		&clk_bcp),
-	CLK(NULL,		"clk_monza_rst_ctrl",	&clk_monza_rst_ctrl),
-	CLK(NULL,		"clk_msmcsram",		&clk_msmcsram),
-	CLK(NULL,		"clk_rac",		&clk_rac),
-	CLK(NULL,		"clk_tac",		&clk_tac),
-	CLK(NULL,		"clk_fftc",		&clk_fftc),
-	CLK(NULL,		"clk_aif2",		&clk_aif2),
-	CLK(NULL,		"clk_tcp3d",		&clk_tcp3d),
-	CLK(NULL,		"clk_vcp2_b",		&clk_vcp2_b),
-	CLK(NULL,		"clk_vcp2_c",		&clk_vcp2_c),
-	CLK(NULL,		"clk_vcp2_d",		&clk_vcp2_d),
-	CLK("keystone-rproc.0",	NULL,                   &clk_gem0),
-	CLK("keystone-rproc.1",	NULL,                   &clk_gem1),
-	CLK("keystone-rproc.2",	NULL,                   &clk_gem2),
-	CLK("keystone-rproc.3",	NULL,                   &clk_gem3),
-	CLK(NULL,		"clk_rsax2_1",		&clk_rsax2_1),
-	CLK(NULL,		"clk_rsax2_0",		&clk_rsax2_0),
-	CLK(NULL,		"clk_tcp3d_b",		&clk_tcp3d_b),
-
 	CLK(NULL,		"timer0",		&clk_timer0),
 	CLK("watchdog",		NULL,			&clk_timer1),
 	CLK(NULL,		"uart0",		&clk_uart0),
@@ -334,8 +85,6 @@ static struct davinci_clk_lookup clks[] = {
 	CLK("i2c_davinci.1",	NULL,			&clk_i2c),
 	CLK("spi_davinci.0",	NULL,			&clk_spi),
 	CLK(NULL,		"gpio",			&clk_gpio),
-	CLK(NULL,		"key_mgr",		&clk_key_mgr),
-
 	CLK(NULL,		NULL,			NULL),
 };
 
@@ -489,9 +238,6 @@ static struct davinci_soc_info tci6614_soc_info = {
 	.ids_num		= ARRAY_SIZE(ids),
 	.jtag_id_reg		= TCI6614_BOOT_CFG_BASE + 0x18,
 	.cpu_clks		= clks,
-	.dev_clk_lookups	= dev_clk_lookups,
-	.psc_bases		= psc_regs,
-	.psc_bases_num		= ARRAY_SIZE(psc_regs),
 	.intc_type		= DAVINCI_INTC_TYPE_OMAP_AINTC,
 	.intc_base		= TCI6614_AINTC_BASE,
 	.intc_irq_prios		= aintc_irq_prios,
