@@ -22,6 +22,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/of_irq.h>
 #include <linux/of_address.h>
 #include <linux/platform_device.h>
 
@@ -172,11 +173,7 @@ static int __devinit keystone_ipc_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	if (of_property_read_u32(dev->of_node, "irq", &kipc->irq)) {
-		dev_err(dev, "ipc irq: No irq in dt bindings\n");
-		return -ENODEV;
-	}
-
+	kipc->irq = irq_of_parse_and_map(dev->of_node, 0);
 	for (i = 0; i < N_IPC_IRQ; i++) {
 		irq_set_chip_and_handler(kipc->base + i,
 					 &kipc->chip, handle_level_irq);
