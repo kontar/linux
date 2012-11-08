@@ -10,6 +10,6 @@
 #ifndef __ASM_HARDWARE_CP_INTD_H
 #define __ASM_HARDWARE_CP_INTD_H
 
-void __init cp_intd_init(void);
+void __init cp_intd_init(void __iomem *addr);
 
 #endif  /* __ASM_HARDWARE_CP_INTD_H */

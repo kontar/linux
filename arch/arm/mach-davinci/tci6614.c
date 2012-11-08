@@ -22,6 +22,7 @@
 #include <linux/err.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/platform_data/clk-keystone-pll.h>
 #include <linux/platform_data/clk-davinci-psc.h>
@@ -57,7 +58,9 @@
 #define RSTMUX8_OMODE_DEVICE_RESET_SHIFT	1
 #define RSTMUX8_OMODE_DEVICE_RESET_MASK		(BIT(1) | BIT(2) | BIT(3))
 #define RSTMUX8_LOCK_MASK			BIT(0)
-
+#define TCI6614_NUM_IRQS			(TCI6614_N_AINTC_IRQ + \
+						TCI6614_N_INTD_IRQ + \
+						TCI6614_N_CPINTC_IRQ)
 /* Host map for interrupt controller */
 static u32 intc_host_map[] = { 0x01010000, 0x01010101, -1 };
 
@@ -239,7 +242,6 @@ static struct davinci_soc_info tci6614_soc_info = {
 	.intc_irq_prios		= aintc_irq_prios,
 	.intc_irq_num		= TCI6614_N_AINTC_IRQ,
 	.intc_host_map		= intc_host_map,
-	.intd_base		= TCI6614_CPINTD_BASE,
 	.intd_irq_base		= TCI6614_INTD_IRQ_BASE,
 	.intc_to_intd_map	= aintc_to_intd_map,
 	.intd_irq_num		= TCI6614_N_INTD_IRQ,
@@ -390,12 +392,12 @@ void cpintc_irq_handler(unsigned irq, struct irq_desc *desc)
 		printk(KERN_NOTICE "cpintc: end irq %d\n", irq);
 }
 
-void __init cpintc_init(void)
+void __init cpintc_init(void __iomem *addr)
 {
 	int i;
 	unsigned long rev;
 
-	cpintc_base = ioremap(TCI6614_CPINTC_BASE, SZ_8K);
+	cpintc_base = addr;
 	BUG_ON(!cpintc_base);
 
 	rev = cpintc_readl(CPINTC_REVISION);
@@ -424,11 +426,44 @@ void __init cpintc_init(void)
 	cpintc_writel(1, CPINTC_GLOBAL_ENABLE);
 }
 
-void __init tci6614_intc_init(void)
+static int __init tci6614_add_irq_domain(struct device_node *np,
+				       struct device_node *interrupt_parent)
 {
-	omap_aintc_init();
-	cp_intd_init();
-	cpintc_init();
+	void __iomem *base;
+	int i = 0;
+
+	do {
+		base = of_iomap(np, i);
+		if (base) {
+			if (i == 0)
+				omap_aintc_init(base);
+			else if (i == 1)
+				cp_intd_init(base);
+			else if (i == 2)
+				cpintc_init(base);
+			else {
+				pr_warn(
+				"Unknown reg base for virtintc controller\n");
+			}
+			i++;
+		}
+	} while (base);
+
+	/* register one domain for all of the controllers */
+	irq_domain_add_legacy(np, TCI6614_NUM_IRQS, 0, 0,
+				&irq_domain_simple_ops, NULL);
+	return 0;
+}
+
+static const struct of_device_id tci6614_irq_match[] = {
+	{ .compatible = "ti,tci6614-intctrl",
+	  .data = tci6614_add_irq_domain, },
+	{},
+};
+
+void __init tci6614_of_init_irq(void)
+{
+	of_irq_init(tci6614_irq_match);
 }
 
 void tci6614_restart(char mode, const char *cmd)

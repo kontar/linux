@@ -100,14 +100,14 @@ static struct irq_chip omap_irq_chip = {
 	.irq_unmask	= omap_unmask_irq,
 };
 
-void __init omap_aintc_init(void)
+void __init omap_aintc_init(void __iomem *addr)
 {
 	unsigned long nr_of_irqs = davinci_soc_info.intc_irq_num;
 	unsigned long tmp;
 	int i;
 
 	davinci_intc_type = DAVINCI_INTC_TYPE_OMAP_AINTC;
-	davinci_intc_base = ioremap(davinci_soc_info.intc_base, SZ_8K);
+	davinci_intc_base = addr;
 
 	tmp = intc_read_reg(INTC_REVISION) & 0xff;
 	printk(KERN_INFO "IRQ: Found an omap-aintc at 0x%p "

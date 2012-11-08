@@ -123,14 +123,14 @@ static void intd_irq_handler(unsigned int irq, struct irq_desc *desc)
 	chip->irq_unmask(irq_data);
 }
 
-void __init cp_intd_init(void)
+void __init cp_intd_init(void __iomem *addr)
 {
 	u32 *intc_to_intd_map	= davinci_soc_info.intc_to_intd_map;
 	unsigned long num_irq	= davinci_soc_info.intd_irq_num;
 	unsigned long rev;
 	int i;
 
-	intd_base = ioremap(davinci_soc_info.intd_base, SZ_4K);
+	intd_base = addr;
 	BUG_ON(!intd_base);
 
 	rev = intd_readl(INTD_REVISION);
