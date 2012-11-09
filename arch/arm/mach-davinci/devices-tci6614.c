@@ -36,11 +36,6 @@
 #define TCI6614_I2C_BASE			0x02530000
 #define TCI6614_SPI_BASE			0x20BF0000
 #define TCI6614_SEM_BASE			0x02640000
-#define TCI6614_ASYNC_EMIF_CNTRL_BASE		0x20C00000
-#define TCI6614_ASYNC_EMIF_DATA_CE0_BASE	0x70000000
-#define TCI6614_ASYNC_EMIF_DATA_CE1_BASE	0x74000000
-#define TCI6614_ASYNC_EMIF_DATA_CE2_BASE	0x78000000
-#define TCI6614_ASYNC_EMIF_DATA_CE3_BASE	0x7c000000
 
 /* TCI6614 specific EDMA3 information */
 #define EDMA_TCI6614_NUM_DMACH		64
@@ -110,13 +105,6 @@ static int __init tci6614_register_spi(struct davinci_spi_platform_data *pdata)
 	return platform_device_register(pdev);
 }
 
-static const u32 emif_windows[] = {
-	TCI6614_ASYNC_EMIF_DATA_CE0_BASE, TCI6614_ASYNC_EMIF_DATA_CE1_BASE,
-	TCI6614_ASYNC_EMIF_DATA_CE2_BASE, TCI6614_ASYNC_EMIF_DATA_CE3_BASE,
-};
-
-static const u32 emif_window_sizes[] = { SZ_128M, SZ_64M, SZ_64M, SZ_64M };
-
 static struct resource wdt_resources[] = {
 	{
 		.start	= TCI6614_WDOG_BASE,
@@ -167,58 +155,12 @@ static struct platform_device tci6614_pmu_device = {
 	.num_resources	= ARRAY_SIZE(pmu_resources),
 };
 
-static int __init nand_init(int chipsel, struct davinci_nand_pdata *data)
-{
-	struct resource res[2];
-	struct platform_device *pdev;
-	u32	range;
-	int	ret;
-
-	/* Figure out the resource range from the ale/cle masks */
-	range = max(data->mask_cle, data->mask_ale);
-	range = PAGE_ALIGN(range + 4) - 1;
-
-	if (range >= emif_window_sizes[chipsel])
-		return -EINVAL;
-
-	pdev = kzalloc(sizeof(*pdev), GFP_KERNEL);
-	if (!pdev)
-		return -ENOMEM;
-
-	pdev->name		= "davinci_nand";
-	pdev->id		= chipsel;
-	pdev->dev.platform_data	= data;
-
-	memset(res, 0, sizeof(res));
-
-	res[0].start	= emif_windows[chipsel];
-	res[0].end	= res[0].start + range;
-	res[0].flags	= IORESOURCE_MEM;
-
-	res[1].start	= TCI6614_ASYNC_EMIF_CNTRL_BASE;
-	res[1].end	= res[1].start + SZ_4K - 1;
-	res[1].flags	= IORESOURCE_MEM;
-
-	ret = platform_device_add_resources(pdev, res, ARRAY_SIZE(res));
-	if (ret < 0) {
-		kfree(pdev);
-		return ret;
-	}
-
-	return platform_device_register(pdev);
-}
-
 void __init tci6614_devices_init(struct tci6614_device_info *info)
 {
-	int i;
-
 	platform_device_register(&tci6614_wdt_device);
 	platform_device_register(&tci6614_sem_device);
 	platform_device_register(&tci6614_pmu_device);
 
-	for (i = 0; i < 4; i++)
-		if (info->nand_config[i])
-			nand_init(i, info->nand_config[i]);
 	if (info->i2c_config)
 		tci6614_register_i2c(info->i2c_config);
 

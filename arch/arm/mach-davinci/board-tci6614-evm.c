@@ -37,52 +37,6 @@
 #include <mach/mux.h>
 #include <mach/cp_intc.h>
 #include <mach/tci6614.h>
-#include <mach/aemif.h>
-
-static struct mtd_partition nand_partitions[] = {
-	/* U-Boot in first 1M */
-	{
-		.name		= "u-boot",
-		.offset		= 0,
-		.size		= (8 * SZ_128K),
-		.mask_flags	= MTD_WRITEABLE,	/* force read-only */
-	},
-	/* bootloader params in the next 512K */
-	{
-		.name		= "params",
-		.offset		= MTDPART_OFS_NXTBLK,
-		.size		= (4 * SZ_128K),
-		.mask_flags	= MTD_WRITEABLE,	/* force read-only */
-	},
-	/* partition for UBIFS filesystem */
-	{
-		.name		= "ubifs",
-		.offset		= MTDPART_OFS_NXTBLK,
-		.size		= MTDPART_SIZ_FULL,
-		.mask_flags	= 0,
-	}
-};
-
-static struct davinci_aemif_timing evm_nandflash_timing = {
-	.wsetup		= 96,
-	.wstrobe	= 390,
-	.whold		= 48,
-	.rsetup		= 96,
-	.rstrobe	= 390,
-	.rhold		= 48,
-	.ta		= 24,
-};
-
-static struct davinci_nand_pdata nand_config = {
-	.mask_cle	= 0x4000,
-	.mask_ale	= 0x2000,
-	.parts		= nand_partitions,
-	.nr_parts	= ARRAY_SIZE(nand_partitions),
-	.ecc_mode	= NAND_ECC_HW,
-	.bbt_options	= NAND_BBT_USE_FLASH,
-	.ecc_bits	= 4,
-	.timing		= &evm_nandflash_timing,
-};
 
 static struct at24_platform_data at24_eeprom_data = {
 	.byte_len	= 1024 * 1024 / 8,
@@ -127,16 +81,6 @@ static struct flash_platform_data spi_nor_flash_data = {
 
 static struct davinci_spi_config spi_nor_flash_cfg = {
 	.io_type	= SPI_IO_TYPE_INTR,
-#if 0
-	.c2tdelay	= 0,
-	.t2cdelay	= 0,
-	.t2edelay	= 0,
-	.c2edelay	= 0,
-	.wdelay		= 0,
-	.odd_parity	= 0,
-	.parity_enable	= 0,
-	.timer_disable	= 0,
-#endif
 };
 
 static struct spi_board_info spi_devices[] = {
@@ -162,7 +106,6 @@ struct davinci_spi_platform_data spi_pdata = {
 };
 
 static struct tci6614_device_info evm_device_info __initconst = {
-	.nand_config[0]		= &nand_config,	/* chip select 0 */
 	.i2c_config		= &i2c_pdata,
 	.spi_config		= &spi_pdata,
 };
@@ -170,6 +113,7 @@ static struct tci6614_device_info evm_device_info __initconst = {
 static struct of_device_id tci6614_dt_match_table[] __initdata = {
 	{ .compatible = "simple-bus",},
 	{ .compatible = "ti,tci6614-bus",},
+	{ .compatible = "ti,davinci-aemif", },
 	{}
 };
 

@@ -69,7 +69,6 @@ static u32 intc_host_map[] = { 0x01010000, 0x01010101, -1 };
 
 lpsc_clk(timer0);
 lpsc_clk(timer1);
-lpsc_clk(aemif);
 lpsc_clk(usim);
 lpsc_clk(i2c);
 lpsc_clk(spi);
@@ -78,7 +77,6 @@ lpsc_clk(gpio);
 static struct davinci_clk_lookup clks[] = {
 	CLK(NULL,		"timer0",		&clk_timer0),
 	CLK("watchdog",		NULL,			&clk_timer1),
-	CLK(NULL,		"aemif",		&clk_aemif),
 	CLK(NULL,		"usim",			&clk_usim),
 	CLK("i2c_davinci.1",	NULL,			&clk_i2c),
 	CLK("spi_davinci.0",	NULL,			&clk_spi),

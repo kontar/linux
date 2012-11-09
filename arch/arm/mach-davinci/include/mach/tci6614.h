@@ -31,13 +31,11 @@
 
 #ifndef __ASSEMBLY__
 
-#include <mach/nand.h>
 #include <mach/i2c.h>
 #include <mach/spi.h>
 
 
 struct tci6614_device_info {
-	struct davinci_nand_pdata	*nand_config[4]; /* 4 chipsels */
 	struct davinci_i2c_platform_data *i2c_config;
 	struct davinci_spi_platform_data *spi_config;
 };
