@@ -110,34 +110,6 @@ static int __init tci6614_register_spi(struct davinci_spi_platform_data *pdata)
 	return platform_device_register(pdev);
 }
 
-static struct plat_serial8250_port serial_data[] = {
-	{
-		.mapbase	= TCI6614_UART0_BASE,
-		.irq		= IRQ_TCI6614_UARTINT0,
-		.flags		= UPF_BOOT_AUTOCONF | UPF_SKIP_TEST |
-				  UPF_IOREMAP,
-		.iotype		= UPIO_MEM32,
-		.regshift	= 2,
-	},
-	{
-		.mapbase	= TCI6614_UART1_BASE,
-		.irq		= IRQ_TCI6614_UARTINT1,
-		.flags		= UPF_BOOT_AUTOCONF | UPF_SKIP_TEST |
-				  UPF_IOREMAP,
-		.iotype		= UPIO_MEM32,
-		.regshift	= 2,
-	},
-	{
-		.flags	= 0,
-	},
-};
-
-struct platform_device tci6614_serial_device = {
-	.name			= "serial8250",
-	.id			= PLAT8250_DEV_PLATFORM,
-	.dev.platform_data	= serial_data,
-};
-
 static const u32 emif_windows[] = {
 	TCI6614_ASYNC_EMIF_DATA_CE0_BASE, TCI6614_ASYNC_EMIF_DATA_CE1_BASE,
 	TCI6614_ASYNC_EMIF_DATA_CE2_BASE, TCI6614_ASYNC_EMIF_DATA_CE3_BASE,
@@ -239,9 +211,6 @@ static int __init nand_init(int chipsel, struct davinci_nand_pdata *data)
 void __init tci6614_devices_init(struct tci6614_device_info *info)
 {
 	int i;
-
-	if (info->serial_config)
-		davinci_serial_init(info->serial_config);
 
 	platform_device_register(&tci6614_wdt_device);
 	platform_device_register(&tci6614_sem_device);

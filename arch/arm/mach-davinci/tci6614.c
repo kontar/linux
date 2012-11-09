@@ -69,8 +69,6 @@ static u32 intc_host_map[] = { 0x01010000, 0x01010101, -1 };
 
 lpsc_clk(timer0);
 lpsc_clk(timer1);
-lpsc_clk(uart0);
-lpsc_clk(uart1);
 lpsc_clk(aemif);
 lpsc_clk(usim);
 lpsc_clk(i2c);
@@ -80,8 +78,6 @@ lpsc_clk(gpio);
 static struct davinci_clk_lookup clks[] = {
 	CLK(NULL,		"timer0",		&clk_timer0),
 	CLK("watchdog",		NULL,			&clk_timer1),
-	CLK(NULL,		"uart0",		&clk_uart0),
-	CLK(NULL,		"uart1",		&clk_uart1),
 	CLK(NULL,		"aemif",		&clk_aemif),
 	CLK(NULL,		"usim",			&clk_usim),
 	CLK("i2c_davinci.1",	NULL,			&clk_i2c),
@@ -255,7 +251,6 @@ static struct davinci_soc_info tci6614_soc_info = {
 	.gpio_unbanked		= TCI6614_N_GPIO,
 	.gpio_irq		= IRQ_TCI6614_GPINT0,
 	.timer_info		= &timer_info,
-	.serial_dev		= &tci6614_serial_device,
 };
 
 void __init tci6614_init(void)

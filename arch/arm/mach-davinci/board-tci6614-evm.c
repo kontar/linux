@@ -102,11 +102,6 @@ static struct davinci_i2c_platform_data i2c_pdata = {
 	.bus_delay	= 0,	/* usec */
 };
 
-
-static struct davinci_uart_config serial_config __initconst = {
-	.enabled_uarts	= BIT(0) | BIT(1),
-};
-
 static struct mtd_partition spi_nor_partitions[] = {
 	/* u-boot-spl in the first 512K */
 	{
@@ -167,7 +162,6 @@ struct davinci_spi_platform_data spi_pdata = {
 };
 
 static struct tci6614_device_info evm_device_info __initconst = {
-	.serial_config		= &serial_config,
 	.nand_config[0]		= &nand_config,	/* chip select 0 */
 	.i2c_config		= &i2c_pdata,
 	.spi_config		= &spi_pdata,
