@@ -23,10 +23,6 @@
 #include <linux/delay.h>
 #include <linux/platform_device.h>
 #include <linux/ratelimit.h>
-#include <linux/mtd/mtd.h>
-#include <linux/mtd/partitions.h>
-#include <linux/spi/spi.h>
-#include <linux/spi/flash.h>
 #include <linux/of_platform.h>
 
 #include <asm/mach/arch.h>
@@ -55,58 +51,8 @@ static struct davinci_i2c_platform_data i2c_pdata = {
 	.bus_delay	= 0,	/* usec */
 };
 
-static struct mtd_partition spi_nor_partitions[] = {
-	/* u-boot-spl in the first 512K */
-	{
-		.name		= "u-boot-spl",
-		.offset		= 0,
-		.size		= (4 * SZ_128K),
-		.mask_flags	= MTD_WRITEABLE,	/* force read-only */
-	},
-	/* test block in the remaining */
-	{
-		.name		= "test",
-		.offset		= MTDPART_OFS_NXTBLK,
-		.size		= MTDPART_SIZ_FULL,
-		.mask_flags	= 0,
-	},
-};
-
-static struct flash_platform_data spi_nor_flash_data = {
-	.name		= "m25p80",
-	.parts		= spi_nor_partitions,
-	.nr_parts	= ARRAY_SIZE(spi_nor_partitions),
-};
-
-static struct davinci_spi_config spi_nor_flash_cfg = {
-	.io_type	= SPI_IO_TYPE_INTR,
-};
-
-static struct spi_board_info spi_devices[] = {
-	/* NOR Flash, CS - 0 */
-	{
-		.modalias		= "n25q032",
-		.platform_data		= &spi_nor_flash_data,
-		.controller_data	= &spi_nor_flash_cfg,
-		.mode			= SPI_MODE_0,
-		.max_speed_hz		= 25000000,
-		.bus_num		= 0,
-		.chip_select		= 0,
-	},
-	/* EEPROM, CS - 1*/
-	/* FPGA, CS - 2*/
-	/* DAC, CS - 3 */
-};
-
-struct davinci_spi_platform_data spi_pdata = {
-	.version	= SPI_VERSION_1,
-	.intr_line	= 0,
-	.num_chipselect = 4,
-};
-
 static struct tci6614_device_info evm_device_info __initconst = {
 	.i2c_config		= &i2c_pdata,
-	.spi_config		= &spi_pdata,
 };
 
 static struct of_device_id tci6614_dt_match_table[] __initdata = {
@@ -124,8 +70,6 @@ static __init void tci6614_evm_board_init(void)
 
 	i2c_register_board_info(1, i2c_devices,
 			ARRAY_SIZE(i2c_devices));
-
-	spi_register_board_info(spi_devices, ARRAY_SIZE(spi_devices));
 }
 
 #ifdef CONFIG_SERIAL_8250_CONSOLE

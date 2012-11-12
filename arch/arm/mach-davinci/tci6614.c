@@ -74,7 +74,6 @@ lpsc_clk(timer0);
 lpsc_clk(timer1);
 lpsc_clk(usim);
 lpsc_clk(i2c);
-lpsc_clk(spi);
 lpsc_clk(gpio);
 
 static struct davinci_clk_lookup clks[] = {
@@ -82,7 +81,6 @@ static struct davinci_clk_lookup clks[] = {
 	CLK("watchdog",		NULL,			&clk_timer1),
 	CLK(NULL,		"usim",			&clk_usim),
 	CLK("i2c_davinci.1",	NULL,			&clk_i2c),
-	CLK("spi_davinci.0",	NULL,			&clk_spi),
 	CLK(NULL,		"gpio",			&clk_gpio),
 	CLK(NULL,		NULL,			NULL),
 };

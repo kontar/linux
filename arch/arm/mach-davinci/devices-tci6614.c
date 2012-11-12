@@ -24,7 +24,6 @@
 
 #include <mach/common.h>
 #include <mach/irqs.h>
-#include <mach/edma.h>
 #include <mach/tci6614.h>
 #include <mach/time.h>
 
@@ -34,7 +33,6 @@
 #define TCI6614_TPTC1_BASE			0x01c10400
 #define TCI6614_WDOG_BASE			0x02280000
 #define TCI6614_I2C_BASE			0x02530000
-#define TCI6614_SPI_BASE			0x20BF0000
 #define TCI6614_SEM_BASE			0x02640000
 
 /* TCI6614 specific EDMA3 information */
@@ -71,35 +69,6 @@ static struct platform_device tci6614_i2c_device = {
 static int __init tci6614_register_i2c(struct davinci_i2c_platform_data *pdata)
 {
 	struct platform_device *pdev = &tci6614_i2c_device;
-
-	pdev->dev.platform_data = pdata;
-	return platform_device_register(pdev);
-}
-
-static struct resource spi_resources[] = {
-	[0] = {
-		.start	= TCI6614_SPI_BASE,
-		.end	= TCI6614_SPI_BASE + SZ_4K - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	[1] = {
-		.start	= IRQ_TCI6614_SPIINT0,
-		.end	= IRQ_TCI6614_SPIINT0,
-		.flags	= IORESOURCE_IRQ,
-	},
-/* Not using DMA */
-};
-
-static struct platform_device tci6614_spi_device = {
-	.name		= "spi_davinci",
-	.id		= 0,
-	.num_resources	= ARRAY_SIZE(spi_resources),
-	.resource	= spi_resources,
-};
-
-static int __init tci6614_register_spi(struct davinci_spi_platform_data *pdata)
-{
-	struct platform_device *pdev = &tci6614_spi_device;
 
 	pdev->dev.platform_data = pdata;
 	return platform_device_register(pdev);
@@ -163,7 +132,4 @@ void __init tci6614_devices_init(struct tci6614_device_info *info)
 
 	if (info->i2c_config)
 		tci6614_register_i2c(info->i2c_config);
-
-	if (info->spi_config)
-		tci6614_register_spi(info->spi_config);
 }
