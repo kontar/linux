@@ -159,6 +159,13 @@ config ARCH_MAY_HAVE_PC_FDC
 config ZONE_DMA
 	bool
 
+config TI_KEYSTONE
+	bool "Enable TI Keystone architecture drivers"
+	default y if (ARCH_DAVINCI_TCI6614 || ARCH_KEYSTONE)
+	help
+	  Configure this option to enable drivers for TI Keystone family of
+	  devices
+
 config NEED_DMA_MAP_STATE
        def_bool y
 
