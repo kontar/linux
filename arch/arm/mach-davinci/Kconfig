@@ -17,9 +17,6 @@ config ARCH_DAVINCI_DMx
 	select CPU_ARM926T
 	bool
 
-config TI_KEYSTONE
-	bool
-
 menu "TI DaVinci Implementations"
 
 comment "DaVinci Core Type"
@@ -76,7 +73,6 @@ config ARCH_DAVINCI_TCI6614
 	select ARM_L1_CACHE_SHIFT_6
 	select OMAP_AINTC
 	select CP_INTD
-	select TI_KEYSTONE
 	select USE_OF
 	select DAVINCI_CLKS
 	select CLK_KEYSTONE_PLL
