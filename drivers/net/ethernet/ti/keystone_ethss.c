@@ -233,6 +233,8 @@ struct cpsw_priv {
 	void __iomem			*sgmii_port_regs;
 
 	u8				 mac_addr[ETH_ALEN];
+	u8				 nic_addr[ETH_ALEN];
+	u32				 has_nic_addr;
 	struct cpsw_slave		*slaves;
 	struct cpsw_ale			*ale;
 
@@ -957,6 +959,10 @@ static int cpsw_open(void *intf_priv, struct net_device *ndev)
 
 	for_each_slave(cpsw_dev, cpsw_slave_open, cpsw_dev);
 
+	if (cpsw_dev->has_nic_addr)
+		cpsw_ale_add_ucast(priv->ale, cpsw_dev->nic_addr,
+			   1, 0, CPSW_NON_VLAN_ADDR);
+
 	init_timer(&cpsw_dev->timer);
 	cpsw_dev->timer.data		= (unsigned long)cpsw_dev;
 	cpsw_dev->timer.function	= cpsw_timer;
@@ -1041,8 +1047,9 @@ static int cpsw_probe(struct netcp_device *netcp_device,
 	struct cpsw_priv *cpsw_dev;
 	struct device_node *slaves, *slave;
 	void __iomem *regs;
-	int slave_num = 0;
+	int slave_num = 0, i;
 	int ret = 0;
+	u32 tmp[6];
 
 	cpsw_dev = devm_kzalloc(dev, sizeof(struct cpsw_priv), GFP_KERNEL);
 	if (!cpsw_dev) {
@@ -1145,6 +1152,17 @@ static int cpsw_probe(struct netcp_device *netcp_device,
 	if (ret < 0) {
 		dev_err(dev, "missing intf_tx_queues parameter, err %d\n", ret);
 		cpsw_dev->intf_tx_queues = 1;
+	}
+
+	if (of_find_property(node, "nic-addr", NULL)) {
+		ret = of_property_read_u32_array(node, "nic-addr", tmp, 6);
+		if (ret < 0) {
+			ret = -ENODEV;
+			goto exit;
+		}
+		cpsw_dev->has_nic_addr = 1;
+		for (i = 0; i < 6; i++)
+			cpsw_dev->nic_addr[i] = (u8)tmp[i];
 	}
 
 	cpsw_dev->ss_regs = regs;
