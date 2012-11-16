@@ -31,8 +31,8 @@
 
 #ifndef __ASSEMBLY__
 
-#include <mach/i2c.h>
-#include <mach/spi.h>
+#include <linux/platform_data/i2c-davinci.h>
+#include <linux/platform_data/spi-davinci.h>
 
 
 struct tci6614_device_info {
