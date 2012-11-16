@@ -33,7 +33,6 @@
 #include <asm/mach-types.h>
 
 #include <mach/irqs.h>
-#include <mach/edma.h>
 #include <mach/mux.h>
 #include <mach/cp_intc.h>
 #include <mach/tci6614.h>
