@@ -32,9 +32,8 @@
 #include <linux/spi/spi.h>
 #include <linux/spi/spi_bitbang.h>
 #include <linux/slab.h>
-
 #include <linux/platform_data/spi-davinci.h>
-#include <mach/edma.h>
+#include <linux/platform_data/edma.h>
 
 #define SPI_NO_RESOURCE		((resource_size_t)-1)
 
@@ -499,6 +498,7 @@ out:
 	return errors;
 }
 
+#ifdef EDMA_SUPPORTED
 static void davinci_spi_dma_callback(unsigned lch, u16 status, void *data)
 {
 	struct davinci_spi *dspi = data;
@@ -516,6 +516,7 @@ static void davinci_spi_dma_callback(unsigned lch, u16 status, void *data)
 	if ((!dspi->wcount && !dspi->rcount) || (status != DMA_COMPLETE))
 		complete(&dspi->done);
 }
+#endif
 
 /**
  * davinci_spi_bufs - functions which will handle transfer data
@@ -570,6 +571,7 @@ static int davinci_spi_bufs(struct spi_device *spi, struct spi_transfer *t)
 		spidat1 |= tx_data & 0xFFFF;
 		iowrite32(spidat1, dspi->base + SPIDAT1);
 	} else {
+#ifdef EDMA_SUPPORTED
 		struct davinci_spi_dma *dma;
 		unsigned long tx_reg, rx_reg;
 		struct edmacc_param param;
@@ -677,6 +679,7 @@ static int davinci_spi_bufs(struct spi_device *spi, struct spi_transfer *t)
 		edma_start(dma->rx_channel);
 		edma_start(dma->tx_channel);
 		set_io_bits(dspi->base + SPIINT, SPIINT_DMA_REQ_EN);
+#endif
 	}
 
 	/* Wait for the transfer to complete */
@@ -692,6 +695,7 @@ static int davinci_spi_bufs(struct spi_device *spi, struct spi_transfer *t)
 	}
 
 	clear_io_bits(dspi->base + SPIINT, SPIINT_MASKALL);
+#ifdef EDMA_SUPPORTED
 	if (spicfg->io_type == SPI_IO_TYPE_DMA) {
 
 		if (t->tx_buf)
@@ -703,6 +707,7 @@ static int davinci_spi_bufs(struct spi_device *spi, struct spi_transfer *t)
 
 		clear_io_bits(dspi->base + SPIINT, SPIINT_DMA_REQ_EN);
 	}
+#endif
 
 	clear_io_bits(dspi->base + SPIGCR1, SPIGCR1_SPIENA_MASK);
 	set_io_bits(dspi->base + SPIGCR1, SPIGCR1_POWERDOWN_MASK);
@@ -752,6 +757,7 @@ static irqreturn_t davinci_spi_irq(s32 irq, void *data)
 	return IRQ_HANDLED;
 }
 
+#ifdef EDMA_SUPPORTED
 static int davinci_spi_request_dma(struct davinci_spi *dspi)
 {
 	int r;
@@ -790,6 +796,7 @@ tx_dma_failed:
 rx_dma_failed:
 	return r;
 }
+#endif
 
 #if defined(CONFIG_OF)
 static const struct of_device_id davinci_spi_of_match[] = {
@@ -967,6 +974,7 @@ static int __devinit davinci_spi_probe(struct platform_device *pdev)
 		dma_tx_chan = r->start;
 
 	dspi->bitbang.txrx_bufs = davinci_spi_bufs;
+#ifdef EDMA_SUPPORTED
 	if (dma_rx_chan != SPI_NO_RESOURCE &&
 	    dma_tx_chan != SPI_NO_RESOURCE) {
 		dspi->dma.rx_channel = dma_rx_chan;
@@ -982,6 +990,7 @@ static int __devinit davinci_spi_probe(struct platform_device *pdev)
 				"event queue: %d\n", dma_rx_chan, dma_tx_chan,
 				pdata->dma_event_q);
 	}
+#endif
 
 	dspi->get_rx = davinci_spi_rx_buf_u8;
 	dspi->get_tx = davinci_spi_tx_buf_u8;
@@ -1026,12 +1035,14 @@ static int __devinit davinci_spi_probe(struct platform_device *pdev)
 	return ret;
 
 free_dma:
+#ifdef EDMA_SUPPORTED
 	edma_free_channel(dspi->dma.tx_channel);
 	edma_free_channel(dspi->dma.rx_channel);
 	edma_free_slot(dspi->dma.dummy_param_slot);
 free_clk:
 	clk_disable(dspi->clk);
 	clk_put(dspi->clk);
+#endif
 put_master:
 	spi_master_put(master);
 irq_free:
