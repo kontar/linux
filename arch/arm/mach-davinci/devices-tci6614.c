@@ -32,7 +32,6 @@
 #define TCI6614_TPTC0_BASE			0x01c10000
 #define TCI6614_TPTC1_BASE			0x01c10400
 #define TCI6614_WDOG_BASE			0x02280000
-#define TCI6614_I2C_BASE			0x02530000
 #define TCI6614_SEM_BASE			0x02640000
 
 /* TCI6614 specific EDMA3 information */
@@ -46,33 +45,6 @@
 #define TCI6614_DMACH2EVENT_MAP0	0x3C0CE000u
 #define TCI6614_DMACH2EVENT_MAP1	0x000FFFFFu
 
-static struct resource tci6614_i2c_resources[] = {
-	{
-		.start	= TCI6614_I2C_BASE,
-		.end	= TCI6614_I2C_BASE + SZ_4K - 1,
-		.flags	= IORESOURCE_MEM,
-	},
-	{
-		.start	= IRQ_TCI6614_I2CINT,
-		.end	= IRQ_TCI6614_I2CINT,
-		.flags	= IORESOURCE_IRQ,
-	},
-};
-
-static struct platform_device tci6614_i2c_device = {
-	.name		= "i2c_davinci",
-	.id		= 1,
-	.num_resources	= ARRAY_SIZE(tci6614_i2c_resources),
-	.resource	= tci6614_i2c_resources,
-};
-
-static int __init tci6614_register_i2c(struct davinci_i2c_platform_data *pdata)
-{
-	struct platform_device *pdev = &tci6614_i2c_device;
-
-	pdev->dev.platform_data = pdata;
-	return platform_device_register(pdev);
-}
 
 static struct resource wdt_resources[] = {
 	{
@@ -129,7 +101,4 @@ void __init tci6614_devices_init(struct tci6614_device_info *info)
 	platform_device_register(&tci6614_wdt_device);
 	platform_device_register(&tci6614_sem_device);
 	platform_device_register(&tci6614_pmu_device);
-
-	if (info->i2c_config)
-		tci6614_register_i2c(info->i2c_config);
 }

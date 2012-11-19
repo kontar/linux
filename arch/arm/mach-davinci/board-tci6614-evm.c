@@ -33,26 +33,7 @@
 #include <mach/cp_intc.h>
 #include <mach/tci6614.h>
 
-static struct at24_platform_data at24_eeprom_data = {
-	.byte_len	= 1024 * 1024 / 8,
-	.page_size	= 128,
-	.flags		= AT24_FLAG_ADDR16,
-};
-
-static struct i2c_board_info __initdata i2c_devices[] = {
-	{
-		I2C_BOARD_INFO("24c1024", 0x50),
-		.platform_data = &at24_eeprom_data,
-	},
-};
-
-static struct davinci_i2c_platform_data i2c_pdata = {
-	.bus_freq	= 100,	/* kHz */
-	.bus_delay	= 0,	/* usec */
-};
-
 static struct tci6614_device_info evm_device_info __initconst = {
-	.i2c_config		= &i2c_pdata,
 };
 
 static struct of_device_id tci6614_dt_match_table[] __initdata = {
@@ -68,8 +49,6 @@ static __init void tci6614_evm_board_init(void)
 
 	tci6614_devices_init(&evm_device_info);
 
-	i2c_register_board_info(1, i2c_devices,
-			ARRAY_SIZE(i2c_devices));
 }
 
 #ifdef CONFIG_SERIAL_8250_CONSOLE
