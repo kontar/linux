@@ -400,7 +400,7 @@ config ARCH_HIGHBANK
 
 config ARCH_KEYSTONE
 	bool "Texas Instruments Keystone Devices"
-	select ARCH_WANT_OPTIONAL_GPIOLIB
+	select ARCH_REQUIRE_GPIOLIB
 	select ARM_GIC
 	select MULTI_IRQ_HANDLER
 	select CLKDEV_LOOKUP
