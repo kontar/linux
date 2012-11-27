@@ -199,7 +199,7 @@ static int vring_get_queue_index(struct virtqueue *_vq)
  */
 static int vring_add_buf(struct virtqueue *_vq, struct scatterlist sg[],
 			 unsigned int out, unsigned int in, void *data,
-			 gfp_t gfp)
+			 unsigned flags, gfp_t gfp)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	unsigned int i, avail, uninitialized_var(prev);
