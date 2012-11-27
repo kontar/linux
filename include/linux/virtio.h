@@ -313,4 +313,10 @@ struct virtio_driver {
 
 int register_virtio_driver(struct virtio_driver *drv);
 void unregister_virtio_driver(struct virtio_driver *drv);
+
+#define module_virtio_driver(__virtio_driver)	\
+	module_driver(__virtio_driver,		\
+		      register_virtio_driver,	\
+		      unregister_virtio_driver)
+
 #endif /* _LINUX_VIRTIO_H */
