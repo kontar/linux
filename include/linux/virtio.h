@@ -32,6 +32,7 @@ struct virtqueue_ops {
  * @name: the name of this virtqueue (mainly for debugging)
  * @vdev: the virtio device this queue was created for.
  * @priv: a pointer for the virtqueue implementation to use.
+ * @driver_data: a pointer for the virtqueue user to use.
  */
 struct virtqueue {
 	struct list_head list;
@@ -39,6 +40,7 @@ struct virtqueue {
 	const char *name;
 	struct virtio_device *vdev;
 	void *priv;
+	void *driver_data;
 	struct virtqueue_ops *ops;
 };
 
@@ -260,6 +262,16 @@ static inline int virtqueue_get_queue_index(struct virtqueue *vq)
 	return -ENOTSUPP;
 }
 
+static inline void *virtqueue_get_drvdata(const struct virtqueue *vq)
+{
+	return vq->driver_data;
+}
+
+static inline void virtqueue_set_drvdata(struct virtqueue *vq, void *data)
+{
+	vq->driver_data = data;
+}
+
 /**
  * virtio_device - representation of a device using virtio
  * @index: unique position on the virtio bus
@@ -318,5 +330,15 @@ void unregister_virtio_driver(struct virtio_driver *drv);
 	module_driver(__virtio_driver,		\
 		      register_virtio_driver,	\
 		      unregister_virtio_driver)
+
+static inline void *virtio_get_drvdata(const struct virtio_device *vdev)
+{
+	return dev_get_drvdata(&vdev->dev);
+}
+
+static inline void virtio_set_drvdata(struct virtio_device *vdev, void *data)
+{
+	dev_set_drvdata(&vdev->dev, data);
+}
 
 #endif /* _LINUX_VIRTIO_H */
