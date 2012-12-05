@@ -1616,7 +1616,7 @@ static void keystone_rio_port_status_timer(unsigned long data)
 	u32 ports = krio_priv->ports_registering;
 
 	if ((krio_priv->port_chk_cnt)++ >= 90) {
-		dev_warn(krio_priv->dev,
+		dev_dbg(krio_priv->dev,
 			"RIO port register timeout, ports %08x not ready\n",
 			ports);
 		return;
