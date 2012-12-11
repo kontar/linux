@@ -39,6 +39,7 @@ obj-$(CONFIG_USB_DWC3)		+= dwc3-omap.o
 ##
 ifneq ($(CONFIG_HAVE_CLK),)
 	obj-$(CONFIG_USB_DWC3)		+= dwc3-exynos.o
+	obj-$(CONFIG_USB_DWC3)		+= dwc3-keystone.o
 endif
 
 ifneq ($(CONFIG_PCI),)
