@@ -25,6 +25,7 @@
 #include <asm/cacheflush.h>
 #include <asm/cputype.h>
 #include <asm/cp15.h>
+#include <asm/psci.h>
 
 #include <linux/arm-cci.h>
 
@@ -315,6 +316,12 @@ static int __init tc2_pm_init(void)
 	void __iomem *scc;
 	u32 a15_cluster_id, a7_cluster_id, sys_info;
 	struct device_node *np;
+
+	ret = psci_probe();
+	if (!ret) {
+		pr_debug("psci found. Aborting native init\n");
+		return -ENODEV;
+	}
 
 	/*
 	 * The power management-related features are hidden behind
