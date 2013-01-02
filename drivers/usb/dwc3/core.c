@@ -107,10 +107,10 @@ void dwc3_set_mode(struct dwc3 *dwc, u32 mode)
 {
 	u32 reg;
 
-	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
+	reg = dwc3_readl(dwc, DWC3_GCTL);
 	reg &= ~(DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_OTG));
 	reg |= DWC3_GCTL_PRTCAPDIR(mode);
-	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
+	dwc3_writel(dwc, DWC3_GCTL, reg);
 }
 
 /**
@@ -122,38 +122,38 @@ static void dwc3_core_soft_reset(struct dwc3 *dwc)
 	u32		reg;
 
 	/* Before Resetting PHY, put Core in Reset */
-	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
+	reg = dwc3_readl(dwc, DWC3_GCTL);
 	reg |= DWC3_GCTL_CORESOFTRESET;
-	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
+	dwc3_writel(dwc, DWC3_GCTL, reg);
 
 	/* Assert USB3 PHY reset */
-	reg = dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(0));
+	reg = dwc3_readl(dwc, DWC3_GUSB3PIPECTL(0));
 	reg |= DWC3_GUSB3PIPECTL_PHYSOFTRST;
-	dwc3_writel(dwc->regs, DWC3_GUSB3PIPECTL(0), reg);
+	dwc3_writel(dwc, DWC3_GUSB3PIPECTL(0), reg);
 
 	/* Assert USB2 PHY reset */
-	reg = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
+	reg = dwc3_readl(dwc, DWC3_GUSB2PHYCFG(0));
 	reg |= DWC3_GUSB2PHYCFG_PHYSOFTRST;
-	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
+	dwc3_writel(dwc, DWC3_GUSB2PHYCFG(0), reg);
 
 	mdelay(100);
 
 	/* Clear USB3 PHY reset */
-	reg = dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(0));
+	reg = dwc3_readl(dwc, DWC3_GUSB3PIPECTL(0));
 	reg &= ~DWC3_GUSB3PIPECTL_PHYSOFTRST;
-	dwc3_writel(dwc->regs, DWC3_GUSB3PIPECTL(0), reg);
+	dwc3_writel(dwc, DWC3_GUSB3PIPECTL(0), reg);
 
 	/* Clear USB2 PHY reset */
-	reg = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
+	reg = dwc3_readl(dwc, DWC3_GUSB2PHYCFG(0));
 	reg &= ~DWC3_GUSB2PHYCFG_PHYSOFTRST;
-	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
+	dwc3_writel(dwc, DWC3_GUSB2PHYCFG(0), reg);
 
 	mdelay(100);
 
 	/* After PHYs are stable we can take Core out of reset state */
-	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
+	reg = dwc3_readl(dwc, DWC3_GCTL);
 	reg &= ~DWC3_GCTL_CORESOFTRESET;
-	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
+	dwc3_writel(dwc, DWC3_GCTL, reg);
 }
 
 /**
@@ -270,13 +270,13 @@ static int dwc3_event_buffers_setup(struct dwc3 *dwc)
 
 		evt->lpos = 0;
 
-		dwc3_writel(dwc->regs, DWC3_GEVNTADRLO(n),
+		dwc3_writel(dwc, DWC3_GEVNTADRLO(n),
 				lower_32_bits(evt->dma));
-		dwc3_writel(dwc->regs, DWC3_GEVNTADRHI(n),
+		dwc3_writel(dwc, DWC3_GEVNTADRHI(n),
 				upper_32_bits(evt->dma));
-		dwc3_writel(dwc->regs, DWC3_GEVNTSIZ(n),
+		dwc3_writel(dwc, DWC3_GEVNTSIZ(n),
 				evt->length & 0xffff);
-		dwc3_writel(dwc->regs, DWC3_GEVNTCOUNT(n), 0);
+		dwc3_writel(dwc, DWC3_GEVNTCOUNT(n), 0);
 	}
 
 	return 0;
@@ -292,10 +292,10 @@ static void dwc3_event_buffers_cleanup(struct dwc3 *dwc)
 
 		evt->lpos = 0;
 
-		dwc3_writel(dwc->regs, DWC3_GEVNTADRLO(n), 0);
-		dwc3_writel(dwc->regs, DWC3_GEVNTADRHI(n), 0);
-		dwc3_writel(dwc->regs, DWC3_GEVNTSIZ(n), 0);
-		dwc3_writel(dwc->regs, DWC3_GEVNTCOUNT(n), 0);
+		dwc3_writel(dwc, DWC3_GEVNTADRLO(n), 0);
+		dwc3_writel(dwc, DWC3_GEVNTADRHI(n), 0);
+		dwc3_writel(dwc, DWC3_GEVNTSIZ(n), 0);
+		dwc3_writel(dwc, DWC3_GEVNTCOUNT(n), 0);
 	}
 }
 
@@ -303,15 +303,15 @@ static void __devinit dwc3_cache_hwparams(struct dwc3 *dwc)
 {
 	struct dwc3_hwparams	*parms = &dwc->hwparams;
 
-	parms->hwparams0 = dwc3_readl(dwc->regs, DWC3_GHWPARAMS0);
-	parms->hwparams1 = dwc3_readl(dwc->regs, DWC3_GHWPARAMS1);
-	parms->hwparams2 = dwc3_readl(dwc->regs, DWC3_GHWPARAMS2);
-	parms->hwparams3 = dwc3_readl(dwc->regs, DWC3_GHWPARAMS3);
-	parms->hwparams4 = dwc3_readl(dwc->regs, DWC3_GHWPARAMS4);
-	parms->hwparams5 = dwc3_readl(dwc->regs, DWC3_GHWPARAMS5);
-	parms->hwparams6 = dwc3_readl(dwc->regs, DWC3_GHWPARAMS6);
-	parms->hwparams7 = dwc3_readl(dwc->regs, DWC3_GHWPARAMS7);
-	parms->hwparams8 = dwc3_readl(dwc->regs, DWC3_GHWPARAMS8);
+	parms->hwparams0 = dwc3_readl(dwc, DWC3_GHWPARAMS0);
+	parms->hwparams1 = dwc3_readl(dwc, DWC3_GHWPARAMS1);
+	parms->hwparams2 = dwc3_readl(dwc, DWC3_GHWPARAMS2);
+	parms->hwparams3 = dwc3_readl(dwc, DWC3_GHWPARAMS3);
+	parms->hwparams4 = dwc3_readl(dwc, DWC3_GHWPARAMS4);
+	parms->hwparams5 = dwc3_readl(dwc, DWC3_GHWPARAMS5);
+	parms->hwparams6 = dwc3_readl(dwc, DWC3_GHWPARAMS6);
+	parms->hwparams7 = dwc3_readl(dwc, DWC3_GHWPARAMS7);
+	parms->hwparams8 = dwc3_readl(dwc, DWC3_GHWPARAMS8);
 }
 
 /**
@@ -326,7 +326,7 @@ static int __devinit dwc3_core_init(struct dwc3 *dwc)
 	u32			reg;
 	int			ret;
 
-	reg = dwc3_readl(dwc->regs, DWC3_GSNPSID);
+	reg = dwc3_readl(dwc, DWC3_GSNPSID);
 	/* This should read as U3 followed by revision number */
 	if ((reg & DWC3_GSNPSID_MASK) != 0x55330000) {
 		dev_err(dwc->dev, "this is not a DesignWare USB3 DRD Core\n");
@@ -337,9 +337,9 @@ static int __devinit dwc3_core_init(struct dwc3 *dwc)
 
 	/* issue device SoftReset too */
 	timeout = jiffies + msecs_to_jiffies(500);
-	dwc3_writel(dwc->regs, DWC3_DCTL, DWC3_DCTL_CSFTRST);
+	dwc3_writel(dwc, DWC3_DCTL, DWC3_DCTL_CSFTRST);
 	do {
-		reg = dwc3_readl(dwc->regs, DWC3_DCTL);
+		reg = dwc3_readl(dwc, DWC3_DCTL);
 		if (!(reg & DWC3_DCTL_CSFTRST))
 			break;
 
@@ -356,7 +356,7 @@ static int __devinit dwc3_core_init(struct dwc3 *dwc)
 
 	dwc3_cache_hwparams(dwc);
 
-	reg = dwc3_readl(dwc->regs, DWC3_GCTL);
+	reg = dwc3_readl(dwc, DWC3_GCTL);
 	reg &= ~DWC3_GCTL_SCALEDOWN_MASK;
 	reg &= ~DWC3_GCTL_DISSCRAMBLE;
 
@@ -377,7 +377,7 @@ static int __devinit dwc3_core_init(struct dwc3 *dwc)
 	if (dwc->revision < DWC3_REVISION_190A)
 		reg |= DWC3_GCTL_U2RSTECN;
 
-	dwc3_writel(dwc->regs, DWC3_GCTL, reg);
+	dwc3_writel(dwc, DWC3_GCTL, reg);
 
 	ret = dwc3_alloc_event_buffers(dwc, DWC3_EVENT_BUFFERS_SIZE);
 	if (ret) {
