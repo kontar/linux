@@ -40,18 +40,18 @@ static int __init init_atags_procfs(void)
 	struct buffer *b;
 	size_t size;
 
-	if (tag->hdr.tag != ATAG_CORE) {
+	if (tag->hdr.tag != cpu_to_atag32(ATAG_CORE)) {
 		printk(KERN_INFO "No ATAGs?");
 		return -EINVAL;
 	}
 
-	for (; tag->hdr.size; tag = tag_next(tag))
+	for_each_tag(tag, tag)
 		;
 
 	/* include the terminating ATAG_NONE */
 	size = (char *)tag - atags_copy + sizeof(struct tag_header);
 
-	WARN_ON(tag->hdr.tag != ATAG_NONE);
+	WARN_ON(tag->hdr.tag != cpu_to_atag32(ATAG_NONE));
 
 	b = kmalloc(sizeof(*b) + size, GFP_KERNEL);
 	if (!b)
