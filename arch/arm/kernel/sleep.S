@@ -126,7 +126,8 @@ ENDPROC(cpu_resume_after_mmu)
 	.data
 	.align
 ENTRY(cpu_resume)
-	mov	r1, #0
+	ARM_BE8(setend be)			@ ensure we are in BE mode
+ 	mov	r1, #0
 	ALT_SMP(mrc p15, 0, r0, c0, c0, 5)
 	ALT_UP_B(1f)
 	adr	r2, mpidr_hash_ptr
