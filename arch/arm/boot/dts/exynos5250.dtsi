@@ -186,21 +186,29 @@
 	serial@12C00000 {
 		clocks = <&clock 289>, <&clock 146>;
 		clock-names = "uart", "clk_uart_baud0";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart0_data &uart0_fctl>;
 	};
 
 	serial@12C10000 {
 		clocks = <&clock 290>, <&clock 147>;
 		clock-names = "uart", "clk_uart_baud0";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart1_data &uart1_fctl>;
 	};
 
 	serial@12C20000 {
 		clocks = <&clock 291>, <&clock 148>;
 		clock-names = "uart", "clk_uart_baud0";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart2_data &uart2_fctl>;
 	};
 
 	serial@12C30000 {
 		clocks = <&clock 292>, <&clock 149>;
 		clock-names = "uart", "clk_uart_baud0";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart3_data>;
 	};
 
 	sata@122F0000 {
