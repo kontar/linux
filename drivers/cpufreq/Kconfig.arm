@@ -4,7 +4,7 @@
 
 config ARM_BIG_LITTLE_CPUFREQ
 	tristate
-	depends on ARM_CPU_TOPOLOGY
+	depends on ARM_CPU_TOPOLOGY && BIG_LITTLE
 	select PM_OPP
 
 config ARM_DT_BL_CPUFREQ
