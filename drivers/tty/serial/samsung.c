@@ -43,6 +43,7 @@
 #include <linux/clk.h>
 #include <linux/cpufreq.h>
 #include <linux/of.h>
+#include <linux/of_gpio.h>
 
 #include <asm/irq.h>
 
@@ -522,6 +523,28 @@ static int s3c64xx_serial_startup(struct uart_port *port)
 	__clear_bit(S3C64XX_UINTM_RXD, portaddrl(port, S3C64XX_UINTM));
 	dbg("s3c64xx_serial_startup ok\n");
 	return ret;
+}
+
+static void s3c64xx_serial_shutdown(struct uart_port *port)
+{
+	struct s3c24xx_uart_port *ourport = to_ourport(port);
+
+	if (ourport->tx_claimed) {
+		free_irq(port->irq, ourport);
+		tx_enabled(port) = 0;
+		ourport->tx_claimed = 0;
+	}
+
+	if (ourport->rx_claimed) {
+		ourport->rx_claimed = 0;
+		rx_enabled(port) = 0;
+	}
+
+	/* Clear pending interrupts and mask all interrupts */
+	if (s3c24xx_serial_has_interrupt_mask(port)) {
+		wr_regl(port, S3C64XX_UINTP, 0xf);
+		wr_regl(port, S3C64XX_UINTM, 0xf);
+	}
 }
 
 /* power power management control */
@@ -1009,6 +1032,9 @@ static void s3c24xx_serial_resetport(struct uart_port *port,
 	wr_regl(port, S3C2410_UFCON, cfg->ufcon | S3C2410_UFCON_RESETBOTH);
 	wr_regl(port, S3C2410_UFCON, cfg->ufcon);
 
+	wr_regl(port, S3C64XX_UINTM, 0xf);
+	wr_regl(port, S3C64XX_UINTP, 0xf);
+
 	/* some delay is required after fifo reset */
 	udelay(1);
 }
@@ -1121,8 +1147,10 @@ static int s3c24xx_serial_init_port(struct s3c24xx_uart_port *ourport,
 	port->dev	= &platdev->dev;
 
 	/* Startup sequence is different for s3c64xx and higher SoC's */
-	if (s3c24xx_serial_has_interrupt_mask(port))
+	if (s3c24xx_serial_has_interrupt_mask(port)) {
 		s3c24xx_serial_ops.startup = s3c64xx_serial_startup;
+		s3c24xx_serial_ops.shutdown = s3c64xx_serial_shutdown;
+	}
 
 	port->uartclk = 1;
 
@@ -1146,6 +1174,27 @@ static int s3c24xx_serial_init_port(struct s3c24xx_uart_port *ourport,
 		dev_err(port->dev, "failed to remap controller address\n");
 		return -EBUSY;
 	}
+
+#ifdef CONFIG_OF
+	if (platdev->dev.of_node) {
+		int gpios = of_gpio_count(platdev->dev.of_node);
+		int idx;
+		int ret;
+		int gpio;
+
+		for (idx = 0; idx < gpios; ++idx) {
+			gpio = of_get_gpio(platdev->dev.of_node, idx);
+			if (!gpio_is_valid(gpio)) {
+				dev_err(port->dev, "invalid gpio[%d]\n", gpio);
+			}
+
+			ret = gpio_request(gpio, "s3c24xx-uart");
+			if (ret)
+				dev_err(port->dev, "gpio[%d] request failed\n",
+						gpio);
+		}
+	}
+#endif
 
 	port->mapbase = res->start;
 	ret = platform_get_irq(platdev, 0);
