@@ -160,7 +160,7 @@ static void dcscb_power_down(void)
 		 * Disable cluster-level coherency by masking
 		 * incoming snoops and DVM messages:
 		 */
-		disable_cci(cluster);
+		cci_disable_port_by_cpu(mpidr);
 
 		__mcpm_outbound_leave_critical(cluster, CLUSTER_DOWN);
 	} else {
