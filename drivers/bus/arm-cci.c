@@ -17,6 +17,7 @@
 #include <linux/arm-cci.h>
 #include <linux/io.h>
 #include <linux/module.h>
+#include <linux/platform_device.h>
 #include <linux/of_address.h>
 #include <linux/slab.h>
 
@@ -53,6 +54,53 @@ static struct cci_ace_port *ports;
 static unsigned int nb_cci_ports;
 
 static void __iomem *cci_ctrl_base;
+
+#ifdef CONFIG_HW_PERF_EVENTS
+
+static void __iomem *cci_pmu_base;
+
+static int cci_pmu_probe(struct platform_device *pdev)
+{
+	struct resource *res;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	cci_pmu_base = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(cci_pmu_base))
+		return PTR_ERR(cci_pmu_base);
+
+	return 0;
+}
+
+static const struct of_device_id arm_cci_pmu_matches[] = {
+	{.compatible = "arm,cci-400-pmu"},
+	{},
+};
+
+static struct platform_driver cci_pmu_platform_driver = {
+	.driver = {
+		   .name = DRIVER_NAME,
+		   .of_match_table = arm_cci_pmu_matches,
+		  },
+	.probe = cci_pmu_probe,
+};
+
+static int __init cci_pmu_init(void)
+{
+	if (platform_driver_register(&cci_pmu_platform_driver))
+		WARN(1, "unable to register CCI platform driver\n");
+	return 0;
+}
+
+#else
+
+static int __init cci_pmu_init(void)
+{
+	return 0;
+}
+
+static void cci_pmu_destroy(void) { }
+
+#endif /* CONFIG_HW_PERF_EVENTS */
 
 struct cpu_port {
 	u64 mpidr;
@@ -416,5 +464,6 @@ bool __init cci_probed(void)
 EXPORT_SYMBOL_GPL(cci_probed);
 
 early_initcall(cci_init);
+core_initcall(cci_pmu_init);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("ARM CCI support");
