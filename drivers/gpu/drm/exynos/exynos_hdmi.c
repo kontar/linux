@@ -34,6 +34,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/io.h>
 #include <linux/of_gpio.h>
+#include <linux/of_address.h>
 
 #include <drm/exynos_drm.h>
 
@@ -188,6 +189,7 @@ struct hdmi_context {
 	struct mutex			hdmi_mutex;
 
 	void __iomem			*regs;
+	void __iomem			*pmu_regs;
 	void				*parent_ctx;
 	int				irq;
 
@@ -401,6 +403,14 @@ static inline void hdmi_reg_writemask(struct hdmi_context *hdata,
 	u32 old = readl(hdata->regs + reg_id);
 	value = (value & mask) | (old & ~mask);
 	writel(value, hdata->regs + reg_id);
+}
+
+static inline void hdmi_pmu_reg_writemask(struct hdmi_context *hdata,
+				 u32 reg_id, u32 value, u32 mask)
+{
+	u32 old = readl(hdata->pmu_regs + reg_id);
+	value = (value & mask) | (old & ~mask);
+	writel(value, hdata->pmu_regs + reg_id);
 }
 
 static void hdmi_v13_regs_dump(struct hdmi_context *hdata, char *prefix)
@@ -1700,7 +1710,9 @@ static void hdmi_poweron(struct hdmi_context *hdata)
 	mutex_unlock(&hdata->hdmi_mutex);
 
 	regulator_bulk_enable(res->regul_count, res->regul_bulk);
-	clk_enable(res->hdmiphy);
+	hdmi_pmu_reg_writemask(hdata, PMU_HDMI_PHY_CONTROL_REG,
+		PMU_HDMI_PHY_ENABLE, PMU_HDMI_PHY_CONTROL_MASK);
+
 	clk_enable(res->hdmi);
 	clk_enable(res->sclk_hdmi);
 
@@ -1727,7 +1739,8 @@ static void hdmi_poweroff(struct hdmi_context *hdata)
 
 	clk_disable(res->sclk_hdmi);
 	clk_disable(res->hdmi);
-	clk_disable(res->hdmiphy);
+	hdmi_pmu_reg_writemask(hdata, PMU_HDMI_PHY_CONTROL_REG,
+		PMU_HDMI_PHY_DISABLE, PMU_HDMI_PHY_CONTROL_MASK);
 	regulator_bulk_disable(res->regul_count, res->regul_bulk);
 
 	mutex_lock(&hdata->hdmi_mutex);
@@ -1826,11 +1839,6 @@ static int hdmi_resources_init(struct hdmi_context *hdata)
 		DRM_ERROR("failed to get clock 'sclk_hdmiphy'\n");
 		goto fail;
 	}
-	res->hdmiphy = devm_clk_get(dev, "hdmiphy");
-	if (IS_ERR(res->hdmiphy)) {
-		DRM_ERROR("failed to get clock 'hdmiphy'\n");
-		goto fail;
-	}
 
 	res->regul_bulk = devm_kzalloc(dev, ARRAY_SIZE(supply) *
 		sizeof(res->regul_bulk[0]), GFP_KERNEL);
@@ -1853,7 +1861,6 @@ static int hdmi_resources_init(struct hdmi_context *hdata)
 	clk_prepare(res->sclk_hdmi);
 	clk_prepare(res->sclk_pixel);
 	clk_prepare(res->sclk_hdmiphy);
-	clk_prepare(res->hdmiphy);
 
 	clk_set_parent(res->sclk_hdmi, res->sclk_pixel);
 
@@ -2017,7 +2024,14 @@ static int hdmi_probe(struct platform_device *pdev)
 		goto err_clk_res;
 	}
 
-	ret = devm_gpio_request(dev, hdata->hpd_gpio, "HPD");
+	hdata->pmu_regs = of_iomap(dev->of_node, 1);
+	if (!hdata->pmu_regs) {
+		DRM_ERROR("failed to find PMU registers\n");
+		ret = -ENOENT;
+		goto err_clk_res;
+	}
+
+	ret = devm_gpio_request(&pdev->dev, hdata->hpd_gpio, "HPD");
 	if (ret) {
 		DRM_ERROR("failed to request HPD gpio\n");
 		goto err_clk_res;
@@ -2078,7 +2092,6 @@ err_clk_res:
 	clk_unprepare(hdata->res.sclk_hdmi);
 	clk_unprepare(hdata->res.sclk_pixel);
 	clk_unprepare(hdata->res.sclk_hdmiphy);
-	clk_unprepare(hdata->res.hdmiphy);
 	return ret;
 }
 
@@ -2101,7 +2114,6 @@ static int hdmi_remove(struct platform_device *pdev)
 	clk_unprepare(hdata->res.sclk_hdmi);
 	clk_unprepare(hdata->res.sclk_pixel);
 	clk_unprepare(hdata->res.sclk_hdmiphy);
-	clk_unprepare(hdata->res.hdmiphy);
 	return 0;
 }
 
