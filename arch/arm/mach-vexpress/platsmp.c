@@ -209,7 +209,7 @@ struct smp_operations __initdata vexpress_smp_ops = {
 bool __init vexpress_smp_init_ops(void)
 {
 #ifdef CONFIG_MCPM
-	if(of_find_compatible_node(NULL, NULL, "arm,cci")) {
+	if(of_find_compatible_node(NULL, NULL, "arm,cci-400")) {
 		mcpm_smp_set_ops();
 		return true;
 	}
