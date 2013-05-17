@@ -104,7 +104,7 @@ void ab8500_restart(char mode, const char *cmd)
 
 	plat = dev_get_platdata(sysctrl_dev->parent);
 	pdata = plat->sysctrl;
-	if (pdata->reboot_reason_code)
+	if (pdata && pdata->reboot_reason_code)
 		reason = pdata->reboot_reason_code(cmd);
 	else
 		pr_warn("[%s] No reboot reason set. Default reason %d\n",
@@ -188,14 +188,15 @@ static int ab8500_sysctrl_probe(struct platform_device *pdev)
 
 	plat = dev_get_platdata(pdev->dev.parent);
 
-	if (!(plat && plat->sysctrl))
+	if (!plat)
 		return -EINVAL;
+
+	sysctrl_dev = &pdev->dev;
 
 	if (plat->pm_power_off)
 		pm_power_off = ab8500_power_off;
 
 	pdata = plat->sysctrl;
-
 	if (pdata) {
 		int last, ret, i, j;
 
