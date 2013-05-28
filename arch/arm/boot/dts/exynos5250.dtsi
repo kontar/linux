@@ -205,6 +205,8 @@
 		interrupts = <0 51 0>;
 		clocks = <&clock 289>, <&clock 146>;
 		clock-names = "uart", "clk_uart_baud0";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart0_data &uart0_fctl>;
 	};
 
 	serial@12C10000 {
@@ -213,6 +215,8 @@
 		interrupts = <0 52 0>;
 		clocks = <&clock 290>, <&clock 147>;
 		clock-names = "uart", "clk_uart_baud0";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart1_data &uart1_fctl>;
 	};
 
 	serial@12C20000 {
@@ -221,6 +225,8 @@
 		interrupts = <0 53 0>;
 		clocks = <&clock 291>, <&clock 148>;
 		clock-names = "uart", "clk_uart_baud0";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart2_data &uart2_fctl>;
 	};
 
 	serial@12C30000 {
@@ -229,19 +235,30 @@
 		interrupts = <0 54 0>;
 		clocks = <&clock 292>, <&clock 149>;
 		clock-names = "uart", "clk_uart_baud0";
+		pinctrl-names = "default";
+		pinctrl-0 = <&uart3_data>;
 	};
 
 	sata@122F0000 {
 		compatible = "samsung,exynos5-sata-ahci";
+		samsung,exynos-sata-phy = <&phy0>;
 		reg = <0x122F0000 0x1ff>;
 		interrupts = <0 115 0>;
 		clocks = <&clock 277>, <&clock 143>;
 		clock-names = "sata", "sclk_sata";
 	};
 
-	sata-phy@12170000 {
+	phy0:sata-phy@12170000 {
 		compatible = "samsung,exynos5-sata-phy";
 		reg = <0x12170000 0x1ff>;
+		clocks = <&clock 287>;
+		clock-names = "sata_phyctrl";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+		sataphy-pmu {
+			reg = <0x10040724 0x4>;
+		};
 	};
 
 	i2c_0: i2c@12C60000 {
@@ -479,6 +496,36 @@
 		pinctrl-0 = <&i2s2_bus>;
 	};
 
+	usb@12000000 {
+		compatible = "samsung,exynos5250-dwusb3";
+		clocks = <&clock 286>;
+		clock-names = "usbdrd30";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		dwc3 {
+			compatible = "synopsys,dwc3";
+			reg = <0x12000000 0x10000>;
+			interrupts = <0 72 0>;
+			usb-phy = <&usb2_phy &usb3_phy>;
+		};
+	};
+
+	usb3_phy: usbphy@12100000 {
+		compatible = "samsung,exynos5250-usb3phy";
+		reg = <0x12100000 0x100>;
+		clocks = <&clock 1>, <&clock 286>;
+		clock-names = "ext_xtal", "usbdrd30";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		usbphy-sys {
+			reg = <0x10040704 0x8>;
+		};
+	};
+
 	usb@12110000 {
 		compatible = "samsung,exynos4210-ehci";
 		reg = <0x12110000 0x100>;
@@ -497,7 +544,7 @@
 		clock-names = "usbhost";
 	};
 
-	usbphy@12130000 {
+	usb2_phy: usbphy@12130000 {
 		compatible = "samsung,exynos5250-usb2phy";
 		reg = <0x12130000 0x100>;
 		clocks = <&clock 1>, <&clock 285>;
@@ -602,18 +649,20 @@
 
 	hdmi {
 		compatible = "samsung,exynos5-hdmi";
-		reg = <0x14530000 0x70000>;
+		reg = <0x14530000 0x70000>, <0x10040700 0x4>;
 		interrupts = <0 95 0>;
-		clocks = <&clock 333>, <&clock 136>, <&clock 137>,
-				<&clock 333>, <&clock 333>;
+		clocks = <&clock 344>, <&clock 136>, <&clock 137>,
+			<&clock 157>, <&clock 345>;
 		clock-names = "hdmi", "sclk_hdmi", "sclk_pixel",
-				"sclk_hdmiphy", "hdmiphy";
+			"sclk_hdmiphy", "mout_hdmi";
 	};
 
 	mixer {
 		compatible = "samsung,exynos5-mixer";
 		reg = <0x14450000 0x10000>;
 		interrupts = <0 94 0>;
+		clocks = <&clock 343>, <&clock 136>;
+		clock-names = "mixer", "sclk_hdmi";
 	};
 
 	dp-controller {
