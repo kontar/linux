@@ -230,14 +230,13 @@ int exynos_mipi_dsi_register_lcd_device(struct mipi_dsim_lcd_device *lcd_dev)
 			pr_err("failed to allocate dsim_ddi object.\n");
 			return -ENOMEM;
 		}
+		mutex_lock(&mipi_dsim_lock);
+		list_add_tail(&dsim_ddi->list, &dsim_ddi_list);
+		mutex_unlock(&mipi_dsim_lock);
 	}
 
 	dsim_ddi->dsim_lcd_dev = lcd_dev;
 	dsim_ddi->bus_id = lcd_dev->bus_id;
-
-	mutex_lock(&mipi_dsim_lock);
-	list_add_tail(&dsim_ddi->list, &dsim_ddi_list);
-	mutex_unlock(&mipi_dsim_lock);
 
 	return 0;
 }
@@ -1000,9 +999,21 @@ static int exynos_mipi_dsi_probe(struct platform_device *pdev)
 
 	exynos_mipi_update_cfg(dsim);
 
+	/* enable the LPDT mode */
+	exynos_mipi_dsi_stand_by(dsim, 0);
+	exynos_mipi_dsi_set_lcdc_transfer_mode(dsim, 1);
+	exynos_mipi_dsi_set_cpu_transfer_mode(dsim, 1);
+	exynos_mipi_dsi_enable_hs_clock(dsim, 0);
+
 	/* set lcd panel sequence commands. */
 	if (dsim_ddi->dsim_lcd_drv && dsim_ddi->dsim_lcd_drv->set_sequence)
 		dsim_ddi->dsim_lcd_drv->set_sequence(dsim_ddi->dsim_lcd_dev);
+
+	/* enable the HS mode */
+	exynos_mipi_dsi_set_lcdc_transfer_mode(dsim, 0);
+	exynos_mipi_dsi_set_cpu_transfer_mode(dsim, 0);
+	exynos_mipi_dsi_enable_hs_clock(dsim, 1);
+	exynos_mipi_dsi_stand_by(dsim, 1);
 
 	dsim->suspended = false;
 

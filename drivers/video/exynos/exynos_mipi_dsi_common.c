@@ -719,7 +719,6 @@ int exynos_mipi_dsi_set_display_mode(struct mipi_dsim_device *dsim,
 	/* in case of VIDEO MODE (RGB INTERFACE), it sets polarities. */
 	if (dsim_config->e_interface == (u32) DSIM_VIDEO) {
 
-		if (dsim_config->auto_vertical_cnt == 0) {
 			exynos_mipi_dsi_set_main_disp_vporch(dsim,
 				dsim_config->cmd_allow,
 				timing->lower_margin,
@@ -730,7 +729,6 @@ int exynos_mipi_dsi_set_display_mode(struct mipi_dsim_device *dsim,
 			exynos_mipi_dsi_set_main_disp_sync_area(dsim,
 				timing->vsync_len,
 				timing->hsync_len);
-		}
 	}
 
 	exynos_mipi_dsi_set_main_disp_resol(dsim, timing->xres,
