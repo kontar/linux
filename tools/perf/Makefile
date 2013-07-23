@@ -670,12 +670,12 @@ $(LIBTRACEEVENT)-clean:
 # already
 $(LIBLK):
 ifeq ($(subdir),)
-	$(QUIET_SUBDIR0)$(LK_DIR) $(QUIET_SUBDIR1) O=$(OUTPUT) liblk.a
+	$(QUIET_SUBDIR0)$(LK_DIR) $(QUIET_SUBDIR1) CROSS_COMPILE=$(CROSS_COMPILE) O=$(OUTPUT) liblk.a
 endif
 
 $(LIBLK)-clean:
 ifeq ($(subdir),)
-	$(QUIET_SUBDIR0)$(LK_DIR) $(QUIET_SUBDIR1) O=$(OUTPUT) clean
+	$(QUIET_SUBDIR0)$(LK_DIR) $(QUIET_SUBDIR1) CROSS_COMPILE=$(CROSS_COMPILE) O=$(OUTPUT) clean
 endif
 
 help:
