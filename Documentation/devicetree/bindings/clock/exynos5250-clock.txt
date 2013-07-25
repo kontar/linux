@@ -158,6 +158,7 @@ clock which they consume.
   dp			342
   mixer			343
   hdmi			344
+  smmu_mixer		345
 
 
    [Clock Muxes]
