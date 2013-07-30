@@ -77,7 +77,7 @@ static unsigned long samsung_pll35xx_recalc_rate(struct clk_hw *hw,
 	u32 mdiv, pdiv, sdiv, pll_con;
 	u64 fvco = parent_rate;
 
-	pll_con = __raw_readl(pll->con_reg);
+	pll_con = readl_relaxed(pll->con_reg);
 	mdiv = (pll_con >> PLL35XX_MDIV_SHIFT) & PLL35XX_MDIV_MASK;
 	pdiv = (pll_con >> PLL35XX_PDIV_SHIFT) & PLL35XX_PDIV_MASK;
 	sdiv = (pll_con >> PLL35XX_SDIV_SHIFT) & PLL35XX_SDIV_MASK;
@@ -181,8 +181,8 @@ static unsigned long samsung_pll36xx_recalc_rate(struct clk_hw *hw,
 	s16 kdiv;
 	u64 fvco = parent_rate;
 
-	pll_con0 = __raw_readl(pll->con_reg);
-	pll_con1 = __raw_readl(pll->con_reg + 4);
+	pll_con0 = readl_relaxed(pll->con_reg);
+	pll_con1 = readl_relaxed(pll->con_reg + 4);
 	mdiv = (pll_con0 >> PLL36XX_MDIV_SHIFT) & PLL36XX_MDIV_MASK;
 	pdiv = (pll_con0 >> PLL36XX_PDIV_SHIFT) & PLL36XX_PDIV_MASK;
 	sdiv = (pll_con0 >> PLL36XX_SDIV_SHIFT) & PLL36XX_SDIV_MASK;
@@ -295,7 +295,7 @@ static unsigned long samsung_pll45xx_recalc_rate(struct clk_hw *hw,
 	u32 mdiv, pdiv, sdiv, pll_con;
 	u64 fvco = parent_rate;
 
-	pll_con = __raw_readl(pll->con_reg);
+	pll_con = readl_relaxed(pll->con_reg);
 	mdiv = (pll_con >> PLL45XX_MDIV_SHIFT) & PLL45XX_MDIV_MASK;
 	pdiv = (pll_con >> PLL45XX_PDIV_SHIFT) & PLL45XX_PDIV_MASK;
 	sdiv = (pll_con >> PLL45XX_SDIV_SHIFT) & PLL45XX_SDIV_MASK;
@@ -380,8 +380,8 @@ static unsigned long samsung_pll46xx_recalc_rate(struct clk_hw *hw,
 	u32 mdiv, pdiv, sdiv, kdiv, pll_con0, pll_con1, shift;
 	u64 fvco = parent_rate;
 
-	pll_con0 = __raw_readl(pll->con_reg);
-	pll_con1 = __raw_readl(pll->con_reg + 4);
+	pll_con0 = readl_relaxed(pll->con_reg);
+	pll_con1 = readl_relaxed(pll->con_reg + 4);
 	mdiv = (pll_con0 >> PLL46XX_MDIV_SHIFT) & PLL46XX_MDIV_MASK;
 	pdiv = (pll_con0 >> PLL46XX_PDIV_SHIFT) & PLL46XX_PDIV_MASK;
 	sdiv = (pll_con0 >> PLL46XX_SDIV_SHIFT) & PLL46XX_SDIV_MASK;
@@ -465,7 +465,7 @@ static unsigned long samsung_pll2550x_recalc_rate(struct clk_hw *hw,
 	u32 r, p, m, s, pll_stat;
 	u64 fvco = parent_rate;
 
-	pll_stat = __raw_readl(pll->reg_base + pll->offset * 3);
+	pll_stat = readl_relaxed(pll->reg_base + pll->offset * 3);
 	r = (pll_stat >> PLL2550X_R_SHIFT) & PLL2550X_R_MASK;
 	if (!r)
 		return 0;
