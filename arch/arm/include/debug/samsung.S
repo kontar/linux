@@ -15,11 +15,17 @@
 
 	.macro fifo_level_s5pv210 rd, rx
 		ldr	\rd, [\rx, # S3C2410_UFSTAT]
+#ifdef __ARMEB__
+                rev \rd, \rd
+#endif /* __ARMEB__*/
 		and	\rd, \rd, #S5PV210_UFSTAT_TXMASK
 	.endm
 
 	.macro  fifo_full_s5pv210 rd, rx
 		ldr	\rd, [\rx, # S3C2410_UFSTAT]
+#ifdef __ARMEB__
+                rev \rd, \rd
+#endif /* __ARMEB__*/
 		tst	\rd, #S5PV210_UFSTAT_TXFULL
 	.endm
 
@@ -28,6 +34,9 @@
 
 	.macro fifo_level_s3c2440 rd, rx
 		ldr	\rd, [\rx, # S3C2410_UFSTAT]
+#ifdef __ARMEB__
+                rev \rd, \rd
+#endif /* __ARMEB__*/
 		and	\rd, \rd, #S3C2440_UFSTAT_TXMASK
 	.endm
 
@@ -37,6 +46,9 @@
 
 	.macro  fifo_full_s3c2440 rd, rx
 		ldr	\rd, [\rx, # S3C2410_UFSTAT]
+#ifdef __ARMEB__
+                rev \rd, \rd
+#endif /* __ARMEB__*/
 		tst	\rd, #S3C2440_UFSTAT_TXFULL
 	.endm
 
@@ -50,6 +62,9 @@
 
 	.macro	busyuart, rd, rx
 		ldr	\rd, [\rx, # S3C2410_UFCON]
+#ifdef __ARMEB__
+                rev \rd, \rd
+#endif /* __ARMEB__*/
 		tst	\rd, #S3C2410_UFCON_FIFOMODE	@ fifo enabled?
 		beq	1001f				@
 		@ FIFO enabled...
@@ -61,6 +76,9 @@
 1001:
 		@ busy waiting for non fifo
 		ldr	\rd, [\rx, # S3C2410_UTRSTAT]
+#ifdef __ARMEB__
+                rev \rd, \rd
+#endif /* __ARMEB__*/
 		tst	\rd, #S3C2410_UTRSTAT_TXFE
 		beq	1001b
 
@@ -69,6 +87,9 @@
 
 	.macro	waituart,rd,rx
 		ldr	\rd, [\rx, # S3C2410_UFCON]
+#ifdef __ARMEB__
+                rev \rd, \rd
+#endif /* __ARMEB__*/
 		tst	\rd, #S3C2410_UFCON_FIFOMODE	@ fifo enabled?
 		beq	1001f				@
 		@ FIFO enabled...
@@ -80,6 +101,9 @@
 1001:
 		@ idle waiting for non fifo
 		ldr	\rd, [\rx, # S3C2410_UTRSTAT]
+#ifdef __ARMEB__
+                rev \rd, \rd
+#endif /* __ARMEB__*/
 		tst	\rd, #S3C2410_UTRSTAT_TXFE
 		beq	1001b
 
