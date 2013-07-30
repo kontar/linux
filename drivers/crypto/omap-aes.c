@@ -174,13 +174,13 @@ static DEFINE_SPINLOCK(list_lock);
 
 static inline u32 omap_aes_read(struct omap_aes_dev *dd, u32 offset)
 {
-	return __raw_readl(dd->io_base + offset);
+	return readl_relaxed(dd->io_base + offset);
 }
 
 static inline void omap_aes_write(struct omap_aes_dev *dd, u32 offset,
 				  u32 value)
 {
-	__raw_writel(value, dd->io_base + offset);
+	writel_relaxed(value, dd->io_base + offset);
 }
 
 static inline void omap_aes_write_mask(struct omap_aes_dev *dd, u32 offset,

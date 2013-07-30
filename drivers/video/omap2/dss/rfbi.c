@@ -122,12 +122,12 @@ static struct {
 
 static inline void rfbi_write_reg(const struct rfbi_reg idx, u32 val)
 {
-	__raw_writel(val, rfbi.base + idx.idx);
+	writel_relaxed(val, rfbi.base + idx.idx);
 }
 
 static inline u32 rfbi_read_reg(const struct rfbi_reg idx)
 {
-	return __raw_readl(rfbi.base + idx.idx);
+	return readl_relaxed(rfbi.base + idx.idx);
 }
 
 static int rfbi_runtime_get(void)
@@ -268,8 +268,8 @@ void omap_rfbi_write_pixels(const void __iomem *buf, int scr_width,
 		for (; h; --h) {
 			for (i = 0; i < w; ++i) {
 				const u8 __iomem *b = (const u8 __iomem *)pd;
-				rfbi_write_reg(RFBI_PARAM, __raw_readb(b+1));
-				rfbi_write_reg(RFBI_PARAM, __raw_readb(b+0));
+				rfbi_write_reg(RFBI_PARAM, readb_relaxed(b+1));
+				rfbi_write_reg(RFBI_PARAM, readb_relaxed(b+0));
 				++pd;
 			}
 			pd += horiz_offset;
@@ -282,9 +282,9 @@ void omap_rfbi_write_pixels(const void __iomem *buf, int scr_width,
 		for (; h; --h) {
 			for (i = 0; i < w; ++i) {
 				const u8 __iomem *b = (const u8 __iomem *)pd;
-				rfbi_write_reg(RFBI_PARAM, __raw_readb(b+2));
-				rfbi_write_reg(RFBI_PARAM, __raw_readb(b+1));
-				rfbi_write_reg(RFBI_PARAM, __raw_readb(b+0));
+				rfbi_write_reg(RFBI_PARAM, readb_relaxed(b+2));
+				rfbi_write_reg(RFBI_PARAM, readb_relaxed(b+1));
+				rfbi_write_reg(RFBI_PARAM, readb_relaxed(b+0));
 				++pd;
 			}
 			pd += horiz_offset;
@@ -296,7 +296,7 @@ void omap_rfbi_write_pixels(const void __iomem *buf, int scr_width,
 
 		for (; h; --h) {
 			for (i = 0; i < w; ++i) {
-				rfbi_write_reg(RFBI_PARAM, __raw_readw(pd));
+				rfbi_write_reg(RFBI_PARAM, readw_relaxed(pd));
 				++pd;
 			}
 			pd += horiz_offset;
