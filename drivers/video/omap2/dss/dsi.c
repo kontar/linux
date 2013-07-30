@@ -421,7 +421,7 @@ static inline void dsi_write_reg(struct platform_device *dsidev,
 {
 	struct dsi_data *dsi = dsi_get_dsidrv_data(dsidev);
 
-	__raw_writel(val, dsi->base + idx.idx);
+	writel_relaxed(val, dsi->base + idx.idx);
 }
 
 static inline u32 dsi_read_reg(struct platform_device *dsidev,
@@ -429,7 +429,7 @@ static inline u32 dsi_read_reg(struct platform_device *dsidev,
 {
 	struct dsi_data *dsi = dsi_get_dsidrv_data(dsidev);
 
-	return __raw_readl(dsi->base + idx.idx);
+	return readl_relaxed(dsi->base + idx.idx);
 }
 
 void dsi_bus_lock(struct omap_dss_device *dssdev)
