@@ -107,6 +107,10 @@ config ARCH_OMAP2PLUS
 
 if ARCH_OMAP2PLUS
 
+config ARCH_SUPPORTS_BIG_ENDIAN
+	bool
+	default y
+
 menu "TI OMAP2/3/4 Specific Features"
 
 config ARCH_OMAP2PLUS_TYPICAL
