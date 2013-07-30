@@ -30,6 +30,10 @@ config ARCH_EXYNOS5
 	help
 	  Samsung EXYNOS5 (Cortex-A15) SoC based systems
 
+config ARCH_SUPPORTS_BIG_ENDIAN
+	bool
+	default y
+
 comment "EXYNOS SoCs"
 
 config CPU_EXYNOS4210
