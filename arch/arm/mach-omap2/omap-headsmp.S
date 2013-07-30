@@ -57,6 +57,14 @@ hold:	ldr	r12,=0x103
 	cmp	r0, r4
 	bne	hold
 
+#ifdef CONFIG_CPU_BE8_BOOT_LE
+        /*
+        * ROM code operates in little endian mode, when we get control we
+        * need to switch it to big endian mode.
+        */
+        setend be
+#endif /* CONFIG_CPU_BE8_BOOT_LE */
+
 	/*
 	 * we've been released from the wait loop,secondary_stack
 	 * should now contain the SVC stack for this core
@@ -73,6 +81,14 @@ hold_2:	ldr	r12,=0x103
 	and	r4, r4, #0x0f
 	cmp	r0, r4
 	bne	hold_2
+
+#ifdef CONFIG_CPU_BE8_BOOT_LE
+        /*
+        * ROM code operates in little endian mode, when we get control we
+        * need to switch it to big endian mode.
+        */
+        setend be
+#endif /* CONFIG_CPU_BE8_BOOT_LE */
 
 	/*
 	 * GIC distributor control register has changed between
