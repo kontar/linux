@@ -1220,7 +1220,7 @@ static void dw_mci_push_data16(struct dw_mci *host, void *buf, int cnt)
 		buf += len;
 		cnt -= len;
 		if (host->part_buf_count == 2) {
-			mci_writew(host, DATA(host->data_offset),
+			mci_writew_data(host, DATA(host->data_offset),
 					host->part_buf16);
 			host->part_buf_count = 0;
 		}
@@ -1238,7 +1238,7 @@ static void dw_mci_push_data16(struct dw_mci *host, void *buf, int cnt)
 			cnt -= len;
 			/* push data from aligned buffer into fifo */
 			for (i = 0; i < items; ++i)
-				mci_writew(host, DATA(host->data_offset),
+				mci_writew_data(host, DATA(host->data_offset),
 						aligned_buf[i]);
 		}
 	} else
@@ -1246,7 +1246,7 @@ static void dw_mci_push_data16(struct dw_mci *host, void *buf, int cnt)
 	{
 		u16 *pdata = buf;
 		for (; cnt >= 2; cnt -= 2)
-			mci_writew(host, DATA(host->data_offset), *pdata++);
+			mci_writew_data(host, DATA(host->data_offset), *pdata++);
 		buf = pdata;
 	}
 	/* put anything remaining in the part_buf */
@@ -1255,7 +1255,7 @@ static void dw_mci_push_data16(struct dw_mci *host, void *buf, int cnt)
 		 /* Push data if we have reached the expected data length */
 		if ((data->bytes_xfered + init_cnt) ==
 		    (data->blksz * data->blocks))
-			mci_writew(host, DATA(host->data_offset),
+			mci_writew_data(host, DATA(host->data_offset),
 				   host->part_buf16);
 	}
 }
@@ -1271,7 +1271,7 @@ static void dw_mci_pull_data16(struct dw_mci *host, void *buf, int cnt)
 			int items = len >> 1;
 			int i;
 			for (i = 0; i < items; ++i)
-				aligned_buf[i] = mci_readw(host,
+				aligned_buf[i] = mci_readw_data(host,
 						DATA(host->data_offset));
 			/* memcpy from aligned buffer into output buffer */
 			memcpy(buf, aligned_buf, len);
@@ -1283,11 +1283,11 @@ static void dw_mci_pull_data16(struct dw_mci *host, void *buf, int cnt)
 	{
 		u16 *pdata = buf;
 		for (; cnt >= 2; cnt -= 2)
-			*pdata++ = mci_readw(host, DATA(host->data_offset));
+			*pdata++ = mci_readw_data(host, DATA(host->data_offset));
 		buf = pdata;
 	}
 	if (cnt) {
-		host->part_buf16 = mci_readw(host, DATA(host->data_offset));
+		host->part_buf16 = mci_readw_data(host, DATA(host->data_offset));
 		dw_mci_pull_final_bytes(host, buf, cnt);
 	}
 }
@@ -1303,7 +1303,7 @@ static void dw_mci_push_data32(struct dw_mci *host, void *buf, int cnt)
 		buf += len;
 		cnt -= len;
 		if (host->part_buf_count == 4) {
-			mci_writel(host, DATA(host->data_offset),
+			mci_writel_data(host, DATA(host->data_offset),
 					host->part_buf32);
 			host->part_buf_count = 0;
 		}
@@ -1321,7 +1321,7 @@ static void dw_mci_push_data32(struct dw_mci *host, void *buf, int cnt)
 			cnt -= len;
 			/* push data from aligned buffer into fifo */
 			for (i = 0; i < items; ++i)
-				mci_writel(host, DATA(host->data_offset),
+				mci_writel_data(host, DATA(host->data_offset),
 						aligned_buf[i]);
 		}
 	} else
@@ -1329,7 +1329,7 @@ static void dw_mci_push_data32(struct dw_mci *host, void *buf, int cnt)
 	{
 		u32 *pdata = buf;
 		for (; cnt >= 4; cnt -= 4)
-			mci_writel(host, DATA(host->data_offset), *pdata++);
+			mci_writel_data(host, DATA(host->data_offset), *pdata++);
 		buf = pdata;
 	}
 	/* put anything remaining in the part_buf */
@@ -1338,7 +1338,7 @@ static void dw_mci_push_data32(struct dw_mci *host, void *buf, int cnt)
 		 /* Push data if we have reached the expected data length */
 		if ((data->bytes_xfered + init_cnt) ==
 		    (data->blksz * data->blocks))
-			mci_writel(host, DATA(host->data_offset),
+			mci_writel_data(host, DATA(host->data_offset),
 				   host->part_buf32);
 	}
 }
@@ -1354,7 +1354,7 @@ static void dw_mci_pull_data32(struct dw_mci *host, void *buf, int cnt)
 			int items = len >> 2;
 			int i;
 			for (i = 0; i < items; ++i)
-				aligned_buf[i] = mci_readl(host,
+				aligned_buf[i] = mci_readl_data(host,
 						DATA(host->data_offset));
 			/* memcpy from aligned buffer into output buffer */
 			memcpy(buf, aligned_buf, len);
@@ -1366,11 +1366,11 @@ static void dw_mci_pull_data32(struct dw_mci *host, void *buf, int cnt)
 	{
 		u32 *pdata = buf;
 		for (; cnt >= 4; cnt -= 4)
-			*pdata++ = mci_readl(host, DATA(host->data_offset));
+			*pdata++ = mci_readl_data(host, DATA(host->data_offset));
 		buf = pdata;
 	}
 	if (cnt) {
-		host->part_buf32 = mci_readl(host, DATA(host->data_offset));
+		host->part_buf32 = mci_readl_data(host, DATA(host->data_offset));
 		dw_mci_pull_final_bytes(host, buf, cnt);
 	}
 }
@@ -1387,7 +1387,7 @@ static void dw_mci_push_data64(struct dw_mci *host, void *buf, int cnt)
 		cnt -= len;
 
 		if (host->part_buf_count == 8) {
-			mci_writeq(host, DATA(host->data_offset),
+			mci_writeq_data(host, DATA(host->data_offset),
 					host->part_buf);
 			host->part_buf_count = 0;
 		}
@@ -1405,7 +1405,7 @@ static void dw_mci_push_data64(struct dw_mci *host, void *buf, int cnt)
 			cnt -= len;
 			/* push data from aligned buffer into fifo */
 			for (i = 0; i < items; ++i)
-				mci_writeq(host, DATA(host->data_offset),
+				mci_writeq_data(host, DATA(host->data_offset),
 						aligned_buf[i]);
 		}
 	} else
@@ -1413,7 +1413,7 @@ static void dw_mci_push_data64(struct dw_mci *host, void *buf, int cnt)
 	{
 		u64 *pdata = buf;
 		for (; cnt >= 8; cnt -= 8)
-			mci_writeq(host, DATA(host->data_offset), *pdata++);
+			mci_writeq_data(host, DATA(host->data_offset), *pdata++);
 		buf = pdata;
 	}
 	/* put anything remaining in the part_buf */
@@ -1422,7 +1422,7 @@ static void dw_mci_push_data64(struct dw_mci *host, void *buf, int cnt)
 		/* Push data if we have reached the expected data length */
 		if ((data->bytes_xfered + init_cnt) ==
 		    (data->blksz * data->blocks))
-			mci_writeq(host, DATA(host->data_offset),
+			mci_writeq_data(host, DATA(host->data_offset),
 				   host->part_buf);
 	}
 }
@@ -1438,7 +1438,7 @@ static void dw_mci_pull_data64(struct dw_mci *host, void *buf, int cnt)
 			int items = len >> 3;
 			int i;
 			for (i = 0; i < items; ++i)
-				aligned_buf[i] = mci_readq(host,
+				aligned_buf[i] = mci_readq_data(host,
 						DATA(host->data_offset));
 			/* memcpy from aligned buffer into output buffer */
 			memcpy(buf, aligned_buf, len);
@@ -1450,11 +1450,11 @@ static void dw_mci_pull_data64(struct dw_mci *host, void *buf, int cnt)
 	{
 		u64 *pdata = buf;
 		for (; cnt >= 8; cnt -= 8)
-			*pdata++ = mci_readq(host, DATA(host->data_offset));
+			*pdata++ = mci_readq_data(host, DATA(host->data_offset));
 		buf = pdata;
 	}
 	if (cnt) {
-		host->part_buf = mci_readq(host, DATA(host->data_offset));
+		host->part_buf = mci_readq_data(host, DATA(host->data_offset));
 		dw_mci_pull_final_bytes(host, buf, cnt);
 	}
 }
