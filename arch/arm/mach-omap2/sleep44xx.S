@@ -74,6 +74,9 @@ ENTRY(omap4_finish_suspend)
 	 */
 	bl	omap4_get_sar_ram_base
 	ldr	r9, [r0, #OMAP_TYPE_OFFSET]
+#ifdef __ARMEB__
+        rev     r9, r9
+#endif /*  __ARMEB__ */
 	cmp	r9, #0x1			@ Check for HS device
 	bne	skip_secure_l1_clean
 	mov	r0, #SCU_PM_NORMAL
@@ -113,12 +116,18 @@ skip_secure_l1_clean:
 	bl	omap4_get_sar_ram_base
 	mov	r8, r0
 	ldr	r9, [r8, #OMAP_TYPE_OFFSET]
+#ifdef __ARMEB__
+        rev     r9, r9
+#endif /*  __ARMEB__ */
 	cmp	r9, #0x1			@ Check for HS device
 	bne	scu_gp_set
 	mrc	p15, 0, r0, c0, c0, 5		@ Read MPIDR
 	ands	r0, r0, #0x0f
 	ldreq	r0, [r8, #SCU_OFFSET0]
 	ldrne	r0, [r8, #SCU_OFFSET1]
+#ifdef __ARMEB__
+        rev     r0, r0
+#endif /*  __ARMEB__ */
 	mov	r1, #0x00
 	stmfd   r13!, {r4-r12, r14}
 	ldr	r12, =OMAP4_MON_SCU_PWR_INDEX
@@ -130,6 +139,9 @@ scu_gp_set:
 	ands	r0, r0, #0x0f
 	ldreq	r1, [r8, #SCU_OFFSET0]
 	ldrne	r1, [r8, #SCU_OFFSET1]
+#ifdef __ARMEB__
+        rev     r1, r1
+#endif /*  __ARMEB__ */
 	bl	omap4_get_scu_base
 	bl	scu_power_mode
 skip_scu_gp_set:
@@ -157,6 +169,9 @@ skip_scu_gp_set:
 	ands	r5, r5, #0x0f
 	ldreq	r0, [r8, #L2X0_SAVE_OFFSET0]	@ Retrieve L2 state from SAR
 	ldrne	r0, [r8, #L2X0_SAVE_OFFSET1]	@ memory.
+#ifdef __ARMEB__
+        rev     r0, r0
+#endif /*  __ARMEB__ */
 	cmp	r0, #3
 	bne	do_WFI
 #ifdef CONFIG_PL310_ERRATA_727915
@@ -167,9 +182,15 @@ skip_scu_gp_set:
 	bl	omap4_get_l2cache_base
 	mov	r2, r0
 	ldr	r0, =0xffff
+#ifdef __ARMEB__
+        rev     r0, r0
+#endif /*  __ARMEB__ */
 	str	r0, [r2, #L2X0_CLEAN_INV_WAY]
 wait:
 	ldr	r0, [r2, #L2X0_CLEAN_INV_WAY]
+#ifdef __ARMEB__
+        rev     r0, r0
+#endif /*  __ARMEB__ */
 	ldr	r1, =0xffff
 	ands	r0, r0, r1
 	bne	wait
@@ -182,9 +203,15 @@ l2x_sync:
 	bl	omap4_get_l2cache_base
 	mov	r2, r0
 	mov	r0, #0x0
+#ifdef __ARMEB__
+        rev     r0, r0
+#endif /*  __ARMEB__ */
 	str	r0, [r2, #L2X0_CACHE_SYNC]
 sync:
 	ldr	r0, [r2, #L2X0_CACHE_SYNC]
+#ifdef __ARMEB__
+        rev     r0, r0
+#endif /*  __ARMEB__ */
 	ands	r0, r0, #0x1
 	bne	sync
 #endif
@@ -216,6 +243,9 @@ do_WFI:
 	bl	omap4_get_sar_ram_base
 	mov	r8, r0
 	ldr	r9, [r8, #OMAP_TYPE_OFFSET]
+#ifdef __ARMEB__
+        rev     r9, r9
+#endif /*  __ARMEB__ */
 	cmp	r9, #0x1			@ Check for HS device
 	bne	scu_gp_clear
 	mov	r0, #SCU_PM_NORMAL
@@ -248,6 +278,13 @@ ENDPROC(omap4_finish_suspend)
  * The restore function pointer is stored at CPUx_WAKEUP_NS_PA_ADDR_OFFSET.
  */
 ENTRY(omap4_cpu_resume)
+#ifdef CONFIG_CPU_BE8_BOOT_LE
+        /*
+         * ROM code operates in little endian mode, when we get control we
+         * need to switch it to big endian mode.
+         */
+        setend  be
+#endif /* CONFIG_CPU_BE8_BOOT_LE */
 	/*
 	 * Configure ACTRL and enable NS SMP bit access on CPU1 on HS device.
 	 * OMAP44XX EMU/HS devices - CPU0 SMP bit access is enabled in PPA
@@ -258,6 +295,9 @@ ENTRY(omap4_cpu_resume)
 	 */
 	ldr	r8, =OMAP44XX_SAR_RAM_BASE
 	ldr	r9, [r8, #OMAP_TYPE_OFFSET]
+#ifdef __ARMEB__
+        rev     r9, r9
+#endif /*  __ARMEB__ */
 	cmp	r9, #0x1			@ Skip if GP device
 	bne	skip_ns_smp_enable
 	mrc     p15, 0, r0, c0, c0, 5
@@ -292,16 +332,25 @@ skip_ns_smp_enable:
 	 */
 	ldr	r2, =OMAP44XX_L2CACHE_BASE
 	ldr	r0, [r2, #L2X0_CTRL]
+#ifdef __ARMEB__
+        rev     r0, r0
+#endif /*  __ARMEB__ */
 	and	r0, #0x0f
 	cmp	r0, #1
 	beq	skip_l2en			@ Skip if already enabled
 	ldr	r3, =OMAP44XX_SAR_RAM_BASE
 	ldr	r1, [r3, #OMAP_TYPE_OFFSET]
+#ifdef __ARMEB__
+        rev     r1, r1
+#endif /*  __ARMEB__ */
 	cmp	r1, #0x1			@ Check for HS device
 	bne     set_gp_por
 	ldr     r0, =OMAP4_PPA_L2_POR_INDEX
 	ldr     r1, =OMAP44XX_SAR_RAM_BASE
 	ldr     r4, [r1, #L2X0_PREFETCH_CTRL_OFFSET]
+#ifdef __ARMEB__
+        rev     r4, r4
+#endif /*  __ARMEB__ */
 	adr     r3, ppa_por_params
 	str     r4, [r3, #0x04]
 	mov	r1, #0x0			@ Process ID
@@ -313,11 +362,17 @@ skip_ns_smp_enable:
 set_gp_por:
 	ldr     r1, =OMAP44XX_SAR_RAM_BASE
 	ldr     r0, [r1, #L2X0_PREFETCH_CTRL_OFFSET]
+#ifdef __ARMEB__
+        rev     r0, r0
+#endif /*  __ARMEB__ */
 	ldr	r12, =OMAP4_MON_L2X0_PREFETCH_INDEX	@ Setup L2 PREFETCH
 	DO_SMC
 set_aux_ctrl:
 	ldr     r1, =OMAP44XX_SAR_RAM_BASE
 	ldr	r0, [r1, #L2X0_AUXCTRL_OFFSET]
+#ifdef __ARMEB__
+        rev     r0, r0
+#endif /*  __ARMEB__ */
 	ldr	r12, =OMAP4_MON_L2X0_AUXCTRL_INDEX	@ Setup L2 AUXCTRL
 	DO_SMC
 	mov	r0, #0x1
