@@ -590,7 +590,7 @@ static int exynos_tmu_initialize(struct platform_device *pdev)
 	}
 
 	if (data->soc == SOC_ARCH_EXYNOS) {
-		__raw_writel(EXYNOS_TRIMINFO_RELOAD,
+		writel_relaxed(EXYNOS_TRIMINFO_RELOAD,
 				data->base + EXYNOS_TMU_TRIMINFO_CON);
 	}
 	/* Save trimming info in order to perform calibration */
