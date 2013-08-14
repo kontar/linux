@@ -68,13 +68,13 @@ extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
 
 struct device_node;
 
-struct smp_enable_ops {
+struct smp_operations {
 	const char	*name;
-	int		(*init_cpu)(struct device_node *, int);
-	int		(*prepare_cpu)(int);
+	int		(*cpu_init)(struct device_node *, unsigned int);
+	int		(*cpu_prepare)(unsigned int);
 };
 
-extern const struct smp_enable_ops smp_spin_table_ops;
-extern const struct smp_enable_ops smp_psci_ops;
+extern const struct smp_operations smp_spin_table_ops;
+extern const struct smp_operations smp_psci_ops;
 
 #endif /* ifndef __ASM_SMP_H */
