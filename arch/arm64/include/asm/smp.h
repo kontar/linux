@@ -67,6 +67,11 @@ extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
 
 struct device_node;
 
+extern int __cpu_disable(void);
+
+extern void __cpu_die(unsigned int cpu);
+extern void cpu_die(void);
+
 /**
  * struct smp_operations - Callback operations for hotplugging CPUs.
  *
@@ -80,6 +85,11 @@ struct device_node;
  * @cpu_boot:	Boots a cpu into the kernel.
  * @cpu_postboot: Optionally, perform any post-boot cleanup or necesary
  *		synchronisation. Called from the cpu being booted.
+ * @cpu_disable: Prepares a cpu to die. May fail for some mechanism-specific
+ * 		reason, which will cause the hot unplug to be aborted. Called
+ * 		from the cpu to be killed.
+ * @cpu_die:	Makes the a leave the kernel. Must not fail. Called from the
+ *		cpu being killed.
  */
 struct smp_operations {
 	const char	*name;
@@ -87,6 +97,10 @@ struct smp_operations {
 	int		(*cpu_prepare)(unsigned int);
 	int		(*cpu_boot)(unsigned int);
 	void		(*cpu_postboot)(void);
+#ifdef CONFIG_HOTPLUG_CPU
+	int  (*cpu_disable)(unsigned int cpu);
+	void (*cpu_die)(unsigned int cpu);
+#endif
 };
 
 extern const struct smp_operations smp_spin_table_ops;
