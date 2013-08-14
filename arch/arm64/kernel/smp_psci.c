@@ -30,24 +30,26 @@ static int smp_psci_cpu_init(struct device_node *dn, unsigned int cpu)
 
 static int smp_psci_cpu_prepare(unsigned int cpu)
 {
-	int err;
-
 	if (!psci_ops.cpu_on) {
 		pr_err("psci: no cpu_on method, not booting CPU%d\n", cpu);
 		return -ENODEV;
 	}
 
-	err = psci_ops.cpu_on(cpu_logical_map(cpu), __pa(secondary_holding_pen));
-	if (err) {
-		pr_err("psci: failed to boot CPU%d (%d)\n", cpu, err);
-		return err;
-	}
-
 	return 0;
+}
+
+static int smp_psci_cpu_boot(unsigned int cpu)
+{
+	int err = psci_ops.cpu_on(cpu_logical_map(cpu), __pa(secondary_entry));
+	if (err)
+		pr_err("psci: failed to boot CPU%d (%d)\n", cpu, err);
+
+	return err;
 }
 
 const struct smp_operations smp_psci_ops = {
 	.name		= "psci",
 	.cpu_init	= smp_psci_cpu_init,
 	.cpu_prepare	= smp_psci_cpu_prepare,
+	.cpu_boot	= smp_psci_cpu_boot,
 };
