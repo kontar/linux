@@ -47,9 +47,39 @@ static int smp_psci_cpu_boot(unsigned int cpu)
 	return err;
 }
 
+#ifdef CONFIG_HOTPLUG_CPU
+static int smp_psci_cpu_disable(unsigned int cpu)
+{
+	/* Fail early if we don't have CPU_OFF support */
+	if (!psci_ops.cpu_off)
+		return -EOPNOTSUPP;
+	return 0;
+}
+
+static void smp_psci_cpu_die(unsigned int cpu)
+{
+	int ret;
+	/*
+	 * There are no known implementations of PSCI actually using the
+	 * power state field, pass a sensible default for now.
+	 */
+	struct psci_power_state state = {
+		.type = PSCI_POWER_STATE_TYPE_POWER_DOWN,
+	};
+
+	ret = psci_ops.cpu_off(state);
+
+	pr_crit("psci: unable to power off CPU%u (%d)\n", cpu, ret);
+}
+#endif
+
 const struct smp_operations smp_psci_ops = {
 	.name		= "psci",
 	.cpu_init	= smp_psci_cpu_init,
 	.cpu_prepare	= smp_psci_cpu_prepare,
 	.cpu_boot	= smp_psci_cpu_boot,
+#ifdef CONFIG_HOTPLUG_CPU
+	.cpu_disable	= smp_psci_cpu_disable,
+	.cpu_die	= smp_psci_cpu_die,
+#endif
 };
