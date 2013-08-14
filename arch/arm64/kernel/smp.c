@@ -254,6 +254,8 @@ void __init smp_init_cpus(void)
 			}
 		}
 
+		enable_method = of_get_property(dn, "enable-method", NULL);
+
 		/*
 		 * The numbering scheme requires that the boot CPU
 		 * must be assigned logical id 0. Record it so that
@@ -269,11 +271,12 @@ void __init smp_init_cpus(void)
 
 			bootcpu_valid = true;
 
+			if (enable_method)
+				smp_ops[0] = smp_get_ops(enable_method);
+
 			/*
-			 * cpu_logical_map has already been
-			 * initialized and the boot cpu doesn't need
-			 * the enable-method so continue without
-			 * incrementing cpu.
+			 * cpu_logical_map has already been initialized so
+			 * continue without incrementing cpu.
 			 */
 			continue;
 		}
@@ -281,10 +284,6 @@ void __init smp_init_cpus(void)
 		if (cpu >= NR_CPUS)
 			goto next;
 
-		/*
-		 * We currently support only the "spin-table" enable-method.
-		 */
-		enable_method = of_get_property(dn, "enable-method", NULL);
 		if (!enable_method) {
 			pr_err("%s: missing enable-method property\n",
 				dn->full_name);
