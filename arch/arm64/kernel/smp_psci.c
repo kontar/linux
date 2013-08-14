@@ -23,12 +23,12 @@
 #include <asm/psci.h>
 #include <asm/smp_plat.h>
 
-static int __init smp_psci_init_cpu(struct device_node *dn, int cpu)
+static int smp_psci_cpu_init(struct device_node *dn, unsigned int cpu)
 {
 	return 0;
 }
 
-static int __init smp_psci_prepare_cpu(int cpu)
+static int smp_psci_cpu_prepare(unsigned int cpu)
 {
 	int err;
 
@@ -46,8 +46,8 @@ static int __init smp_psci_prepare_cpu(int cpu)
 	return 0;
 }
 
-const struct smp_enable_ops smp_psci_ops __initconst = {
+const struct smp_operations smp_psci_ops = {
 	.name		= "psci",
-	.init_cpu	= smp_psci_init_cpu,
-	.prepare_cpu	= smp_psci_prepare_cpu,
+	.cpu_init	= smp_psci_cpu_init,
+	.cpu_prepare	= smp_psci_cpu_prepare,
 };
