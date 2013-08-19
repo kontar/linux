@@ -714,6 +714,12 @@ config GPIO_MSIC
 	  Enable support for GPIO on intel MSIC controllers found in
 	  intel MID devices
 
+config GPIO_BCM_KONA
+	bool "Broadcom Kona GPIO"
+	depends on ARCH_BCM
+	help
+	  Turn on GPIO support for Broadcom "Kona" chips.
+
 comment "USB GPIO expanders:"
 
 config GPIO_VIPERBOARD

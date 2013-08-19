@@ -1,0 +1,41 @@
+Broadcom Kona Family GPIO
+-------------------------
+
+This GPIO driver is used in the following Broadcom SoCs:
+  BCM11130, BCM11140, BCM11351, BCM28145, BCM28155
+
+The GPIO controller only supports edge, not level triggering.
+
+Required properties:
+  - compatible: "brcm,kona-gpio"
+  - reg: Physical base address and length of the controller's registers.
+  - interrupts: The interrupt outputs from the controller.
+  - #gpio-cells: Should be <2>. The first cell is the pin number, the second
+    cell is used to specify optional parameters:
+    - bit 0 specifies polarity (0 for normal, 1 for inverted)
+  - #interrupt-cells: Should be <2>. The first cell is the GPIO number.
+    The second cell is used to specify flags:
+    - trigger type (bits[1:0]):
+        1 = low-to-high edge triggered.
+        2 = high-to-low edge triggered.
+        3 = low-to-high or high-to-low edge triggered
+        Valid values are 1, 2, 3
+  - gpio-controller: Marks the device node as a GPIO controller.
+  - interrupt-controller: Marks the device node as an interrupt controller.
+
+Example:
+	gpio: gpio@35003000 {
+		compatible = "brcm,kona-gpio";
+		reg = <0x35003000 0x800>;
+		interrupts =
+		       <0x0 106 0x4
+			0x0 115 0x4
+			0x0 114 0x4
+			0x0 113 0x4
+			0x0 112 0x4
+			0x0 111 0x4>;
+		#gpio-cells = <2>;
+		#interrupt-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+	};
