@@ -656,4 +656,13 @@
 		clocks = <&clock 133>, <&clock 339>;
 		clock-names = "sclk_fimd", "fimd";
 	};
+
+	mipi-dsim {
+		status = "disabled";
+		compatible = "samsung,exynos-mipidsim";
+		reg = <0x14500000 0x10000>;
+		interrupts = <0 82 0>;
+		clocks = <&clock 341>;
+		clock-names = "dsim0";
+	};
 };
