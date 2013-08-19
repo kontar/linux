@@ -24,6 +24,7 @@
 #include <linux/fb.h>
 #include <linux/backlight.h>
 #include <linux/regulator/consumer.h>
+#include <linux/of_gpio.h>
 
 #include <video/mipi_display.h>
 #include <video/exynos_mipi_dsim.h>
@@ -49,6 +50,9 @@ enum {
 
 struct s6e8ax0 {
 	struct device	*dev;
+	unsigned int			gpio_reset;
+	unsigned int			gpio_power;
+	unsigned int			gpio_bl;
 	unsigned int			power;
 	unsigned int			id;
 	unsigned int			gamma;
@@ -746,6 +750,35 @@ static void s6e8ax0_power_on(struct mipi_dsim_lcd_device *dsim_dev, int power)
 
 	msleep(lcd->ddi_pd->power_on_delay);
 
+       if (power) {
+               gpio_request_one(lcd->gpio_reset, GPIOF_OUT_INIT_HIGH, 0);
+               mdelay(500);
+               gpio_set_value(lcd->gpio_reset, 0);
+               mdelay(500);
+               gpio_set_value(lcd->gpio_reset, 1);
+               gpio_free(lcd->gpio_reset);
+               mdelay(5);
+
+               gpio_request_one(lcd->gpio_power, GPIOF_OUT_INIT_HIGH, 0);
+               gpio_set_value(lcd->gpio_power, 1);
+               gpio_free(lcd->gpio_power);
+
+               gpio_request_one(lcd->gpio_bl, GPIOF_OUT_INIT_HIGH, 0);
+               gpio_set_value(lcd->gpio_bl, 1);
+               gpio_free(lcd->gpio_bl);
+
+       } else {
+               gpio_request_one(lcd->gpio_reset, GPIOF_OUT_INIT_LOW, 0);
+               mdelay(500);
+               gpio_free(lcd->gpio_reset);
+
+               gpio_request_one(lcd->gpio_power, GPIOF_OUT_INIT_LOW, 0);
+               mdelay(500);
+               gpio_free(lcd->gpio_power);
+       }
+
+       mdelay(500);
+
 	/* lcd power on */
 	if (power)
 		s6e8ax0_regulator_enable(lcd);
@@ -770,6 +803,60 @@ static void s6e8ax0_set_sequence(struct mipi_dsim_lcd_device *dsim_dev)
 	lcd->power = FB_BLANK_UNBLANK;
 }
 
+static int s6e8ax0_update_platform_lcd_data(
+					struct s6e8ax0 *lcd_s6e8ax0)
+{
+	struct lcd_platform_data *ddi_pd = lcd_s6e8ax0->ddi_pd;
+	struct device_node *np = (struct device_node *)
+					lcd_s6e8ax0->ddi_pd->pdata;
+
+	lcd_s6e8ax0->gpio_reset = of_get_named_gpio(np, "gpio-reset", 0);
+	if (!gpio_is_valid(lcd_s6e8ax0->gpio_reset)) {
+		dev_err(lcd_s6e8ax0->dev,
+			"failed to get poweron gpio-reset information.\n");
+		return -EINVAL;
+	}
+
+	lcd_s6e8ax0->gpio_power = of_get_named_gpio(np, "gpio-power", 0);
+	if (!gpio_is_valid(lcd_s6e8ax0->gpio_power)) {
+		dev_err(lcd_s6e8ax0->dev,
+			"failed to get poweron gpio-power information.\n");
+		return -EINVAL;
+	}
+
+	lcd_s6e8ax0->gpio_bl = of_get_named_gpio(np, "gpio-bl", 0);
+	if (!gpio_is_valid(lcd_s6e8ax0->gpio_bl)) {
+		dev_err(lcd_s6e8ax0->dev,
+			"failed to get pwm-bl information.\n");
+		return -EINVAL;
+	}
+
+	if (of_property_read_u32(np, "enabled",
+			(unsigned int *)&ddi_pd->lcd_enabled))
+		ddi_pd->lcd_enabled = 0;
+
+	if (of_property_read_u32(np, "reset-delay",
+				&ddi_pd->reset_delay)) {
+		dev_err(lcd_s6e8ax0->dev, "reset-delay property not found");
+		return -EINVAL;
+	}
+
+	if (of_property_read_u32(np, "power-on-delay",
+				&ddi_pd->power_on_delay)) {
+		dev_err(lcd_s6e8ax0->dev, "power-on-delay property not found");
+		return -EINVAL;
+	}
+
+	if (of_property_read_u32(np, "power-off-delay",
+				&ddi_pd->power_off_delay)) {
+		dev_err(lcd_s6e8ax0->dev,
+			"power-off-delay property not found");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int s6e8ax0_probe(struct mipi_dsim_lcd_device *dsim_dev)
 {
 	struct s6e8ax0 *lcd;
@@ -785,6 +872,11 @@ static int s6e8ax0_probe(struct mipi_dsim_lcd_device *dsim_dev)
 	lcd->dsim_dev = dsim_dev;
 	lcd->ddi_pd = (struct lcd_platform_data *)dsim_dev->platform_data;
 	lcd->dev = &dsim_dev->dev;
+
+	/* get platform data information, if lcd device node is present */
+	if (lcd->ddi_pd->pdata)
+		if (s6e8ax0_update_platform_lcd_data(lcd))
+			return -EINVAL;
 
 	mutex_init(&lcd->lock);
 
@@ -808,7 +900,6 @@ static int s6e8ax0_probe(struct mipi_dsim_lcd_device *dsim_dev)
 		ret = PTR_ERR(lcd->bd);
 		goto err_backlight_register;
 	}
-
 	lcd->bd->props.max_brightness = MAX_BRIGHTNESS;
 	lcd->bd->props.brightness = MAX_BRIGHTNESS;
 
