@@ -260,6 +260,8 @@
 
 		pinctrl-names = "default";
 		pinctrl-0 = <&dp_hpd>;
+		lcd_bl_gpio = <&gpb2 0 1>;
+		lcd_en_gpio = <&gpx1 5 1>;
 	};
 
 	display-timings {
