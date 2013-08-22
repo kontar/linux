@@ -263,7 +263,7 @@
 	};
 
 	display-timings {
-		native-mode = <&timing0>;
+		native-mode = <&timing1>;
 		timing0: timing@0 {
 			/* 1280x800 */
 			clock-frequency = <50000>;
@@ -275,6 +275,18 @@
 			vback-porch = <4>;
 			vfront-porch = <4>;
 			vsync-len = <4>;
+		};
+		timing1: timing@1 {
+			/* 800x1280 */
+			clock-frequency = <266000000>;
+			hactive = <800>;
+			vactive = <1280>;
+			hfront-porch = <11>;
+			hback-porch = <3>;
+			hsync-len = <2>;
+			vback-porch = <11>;
+			vfront-porch = <3>;
+			vsync-len = <2>;
 		};
 	};
 
