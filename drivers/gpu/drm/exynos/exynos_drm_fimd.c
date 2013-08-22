@@ -786,6 +786,7 @@ static int fimd_calc_clkdiv(struct fimd_context *ctx,
 		}
 	}
 
+	clkdiv = 5;
 	return clkdiv;
 }
 
