@@ -101,6 +101,8 @@ struct fimd_context {
 	struct exynos_drm_subdrv	subdrv;
 	int				irq;
 	struct drm_crtc			*crtc;
+	struct clk			*sclk_mout_fimd;
+	struct clk			*fimd_mux_clk;
 	struct clk			*bus_clk;
 	struct clk			*lcd_clk;
 	void __iomem			*regs;
@@ -930,6 +932,24 @@ static int fimd_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to get lcd clock\n");
 		return PTR_ERR(ctx->lcd_clk);
 	}
+
+	/* Set the parent for FIMD pixel clock */
+	ctx->fimd_mux_clk = devm_clk_get(dev, "mout_fimd");
+	if (IS_ERR(ctx->fimd_mux_clk)) {
+		dev_err(dev, "failed to get fimd mux clk\n");
+		return PTR_ERR(ctx->fimd_mux_clk);
+	}
+
+	ctx->sclk_mout_fimd = devm_clk_get(dev, "sclk_mout_fimd");
+	if (IS_ERR(ctx->sclk_mout_fimd)) {
+		dev_err(dev, "failed to get mout_fimd parent\n");
+		return PTR_ERR(ctx->sclk_mout_fimd);
+	}
+
+	clk_set_parent(ctx->fimd_mux_clk, ctx->sclk_mout_fimd);
+
+	/* Set the FIMD pixel clock to desired value */
+	clk_set_rate(ctx->lcd_clk, (1000 * PICOS2KHZ(panel->timing.pixclock)));
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
