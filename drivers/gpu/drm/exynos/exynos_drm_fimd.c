@@ -859,6 +859,7 @@ static int fimd_activate(struct fimd_context *ctx, bool enable)
 		if (ret < 0)
 			return ret;
 
+		writel((3 << 0), ctx->regs + 0x27c);
 		ctx->suspended = false;
 
 		/* if vblank was enabled status, enable it again. */
@@ -983,6 +984,8 @@ static int fimd_probe(struct platform_device *pdev)
 		fimd_clear_win(ctx, win);
 
 	exynos_drm_subdrv_register(subdrv);
+
+	writel((3 << 0), ctx->regs + 0x27c);
 
 	return 0;
 }
