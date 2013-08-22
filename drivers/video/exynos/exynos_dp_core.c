@@ -19,6 +19,7 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <linux/of.h>
+#include <linux/of_gpio.h>
 
 #include <video/exynos_dp.h>
 
@@ -865,13 +866,13 @@ static void exynos_dp_hotplug(struct work_struct *work)
 	ret = exynos_dp_detect_hpd(dp);
 	if (ret) {
 		/* Cable has been disconnected, we're done */
-		return;
+		//return;
 	}
 
 	ret = exynos_dp_handle_edid(dp);
 	if (ret) {
 		dev_err(dp->dev, "unable to handle edid\n");
-		return;
+		//return;
 	}
 
 	ret = exynos_dp_set_link_train(dp, dp->video_info->lane_count,
@@ -895,11 +896,50 @@ static void exynos_dp_hotplug(struct work_struct *work)
 }
 
 #ifdef CONFIG_OF
+static int exynos_parse_gpio(struct device *dev)
+{
+	int gpio = -1;
+	struct device_node *np = dev->of_node;
+	enum of_gpio_flags flags;
+	u32 value;
+	int ret = -1;
+
+	if (!of_find_property(np, "lcd_bl_gpio", &value)) {
+                dev_err(dev, "no bl gpio property found\n");
+		return -1;
+        }
+
+	gpio = of_get_named_gpio_flags(np, "lcd_bl_gpio", 0, &flags);
+        if (gpio_is_valid(gpio)) {
+                ret = gpio_request_one(gpio, GPIOF_OUT_INIT_HIGH, "exynos4-fb");
+                if (ret < 0) {
+                        return ret;
+		}
+        }
+	gpio_set_value(gpio, 1);
+
+	if (!of_find_property(np, "lcd_en_gpio", &value)) {
+                dev_err(dev, "no bl gpio property found\n");
+		return -1;
+        }
+        gpio = of_get_named_gpio_flags(np, "lcd_en_gpio", 0, &flags);
+        if (gpio_is_valid(gpio)) {
+                ret = gpio_request_one(gpio, GPIOF_OUT_INIT_HIGH, "exynos4-fb");
+                if (ret < 0) {
+                        return ret;
+		}
+        }
+	gpio_set_value(gpio, 1);
+
+	return 0;
+}
+
 static struct exynos_dp_platdata *exynos_dp_dt_parse_pdata(struct device *dev)
 {
 	struct device_node *dp_node = dev->of_node;
 	struct exynos_dp_platdata *pd;
 	struct video_info *dp_video_config;
+	int ret = -1;
 
 	pd = devm_kzalloc(dev, sizeof(*pd), GFP_KERNEL);
 	if (!pd) {
@@ -959,6 +999,10 @@ static struct exynos_dp_platdata *exynos_dp_dt_parse_pdata(struct device *dev)
 		dev_err(dev, "failed to get lane-count\n");
 		return ERR_PTR(-EINVAL);
 	}
+
+	ret = exynos_parse_gpio(dev);
+	if (ret != 0)
+		return NULL;
 
 	return pd;
 }
@@ -1116,6 +1160,8 @@ static int exynos_dp_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dp);
 
+	schedule_work(&dp->hotplug_work);
+
 	return 0;
 }
 
@@ -1207,7 +1253,21 @@ static struct platform_driver exynos_dp_driver = {
 	},
 };
 
-module_platform_driver(exynos_dp_driver);
+//module_platform_driver(exynos_dp_driver);
+static int __init exynos_dp_init(void)
+{
+       return platform_driver_probe(&exynos_dp_driver, exynos_dp_probe);
+}
+
+static void __exit exynos_dp_exit(void)
+{
+       platform_driver_unregister(&exynos_dp_driver);
+}
+/* TODO: Register as module_platform_driver */
+/* Currently, we make it late_initcall to make */
+/* sure that s3c-fb is probed before DP driver */
+late_initcall(exynos_dp_init);
+module_exit(exynos_dp_exit);
 
 MODULE_AUTHOR("Jingoo Han <jg1.han@samsung.com>");
 MODULE_DESCRIPTION("Samsung SoC DP Driver");
