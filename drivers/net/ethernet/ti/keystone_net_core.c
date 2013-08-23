@@ -1686,7 +1686,7 @@ int netcp_create_interface(struct netcp_device *netcp_device,
 	netcp->netcp_device = netcp_device;
 	netcp->pdev = netcp_device->platform_device;
 	netcp->ndev = ndev;
-	netcp->dev  = &ndev->dev;
+	netcp->dev  = &pdev->dev;
 	netcp->cpsw_port = cpsw_port;
 	netcp->msg_enable = netif_msg_init(netcp_debug_level, NETCP_DEBUG);
 	netcp->rx_packet_max = netcp_rx_packet_max;
