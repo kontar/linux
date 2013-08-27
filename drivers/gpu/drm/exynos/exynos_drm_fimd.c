@@ -17,6 +17,7 @@
 #include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <linux/of_device.h>
+#include <linux/of_address.h>
 #include <linux/pm_runtime.h>
 
 #include <video/of_display_timing.h>
@@ -106,6 +107,7 @@ struct fimd_context {
 	struct clk			*bus_clk;
 	struct clk			*lcd_clk;
 	void __iomem			*regs;
+	void __iomem                    *sys_reg;
 	struct fimd_win_data		win_data[WINDOWS_NR];
 	unsigned int			clkdiv;
 	unsigned int			default_win;
@@ -888,6 +890,7 @@ static int fimd_probe(struct platform_device *pdev)
 	struct exynos_drm_fimd_pdata *pdata;
 	struct exynos_drm_panel_info *panel;
 	struct resource *res;
+	struct device_node *sys_reg_node;
 	int win;
 	int ret = -EINVAL;
 
@@ -1005,6 +1008,17 @@ static int fimd_probe(struct platform_device *pdev)
 		fimd_clear_win(ctx, win);
 
 	exynos_drm_subdrv_register(subdrv);
+
+	sys_reg_node = of_parse_phandle(dev->of_node, "samsung,sys-reg", 0);
+
+	if(!sys_reg_node)
+		return -EINVAL;
+
+	ctx->sys_reg = of_iomap(sys_reg_node, 0);
+	if (!ctx->sys_reg)
+		return -EINVAL;
+
+	writel(((1 << 15) | readl(ctx->sys_reg + 0x214)), ctx->sys_reg + 0x214);
 
 	writel((3 << 0), ctx->regs + 0x27c);
 
