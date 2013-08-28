@@ -524,7 +524,7 @@
 			native-mode = <&timing0>;
 			timing0: timing@0 {
 				/* 2560x1600 DP panel */
-				clock-frequency = <50000>;
+				clock-frequency = <266000000>;
 				hactive = <2560>;
 				vactive = <1600>;
 				hfront-porch = <48>;
