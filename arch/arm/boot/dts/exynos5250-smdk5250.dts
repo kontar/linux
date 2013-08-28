@@ -61,6 +61,22 @@
 		regulator-always-on;
 	};
 
+	vdd11:fixed-regulator@3 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd11-supply";
+		regulator-min-microvolt = <1100000>;
+		regulator-max-microvolt = <1100000>;
+		regulator-always-on;
+	};
+
+	vdd18:fixed-regulator@4 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd18-supply";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-always-on;
+	};
+
 	i2c@12C70000 {
 		samsung,i2c-sda-delay = <100>;
 		samsung,i2c-max-bus-freq = <20000>;
@@ -344,6 +360,12 @@
 		mipi-phy = <&mipi_dsim_phy>;
 		enabled = <0>;
 		panel-info = <&lcd_mipi_dsi_s6e8ax0>;
+
+		vdd11-supply = <&vdd11>;
+		vdd18-supply = <&vdd18>;
+		vdd3-supply = <&vdd18>;
+		vci-supply = <&vdd18>;
+
 		mipi-config {
 			e_interface = <1>;
 			e_pixel_format = <7>;
