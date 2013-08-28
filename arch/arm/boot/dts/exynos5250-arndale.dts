@@ -498,6 +498,22 @@
 		hub-connect = <&gpd1 7 1>;
 	};
 
+	vdd11:fixed-regulator@0 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd11-supply";
+		regulator-min-microvolt = <1100000>;
+		regulator-max-microvolt = <1100000>;
+		regulator-always-on;
+	};
+
+	vdd18:fixed-regulator@1 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd18-supply";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-always-on;
+	};
+
 	fixed-rate-clocks {
 		xxti {
 			compatible = "samsung,clock-xxti";
@@ -580,6 +596,11 @@
 		mipi-phy = <&mipi_dsim_phy>;
 		enabled = <0>;
 		panel-info = <&lcd_mipi_dsi_s6e8ax0>;
+		vdd11-supply = <&vdd11>;
+		vdd18-supply = <&vdd18>;
+		vdd3-supply = <&vdd18>;
+		vci-supply = <&vdd18>;
+
 		mipi-config {
 			e_interface = <1>;
 			e_pixel_format = <7>;
