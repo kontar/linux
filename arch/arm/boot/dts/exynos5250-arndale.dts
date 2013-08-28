@@ -531,6 +531,18 @@
 				vfront-porch = <8>;
 				vsync-len = <6>;
 			};
+		timing1: timing@1 {
+				/* 800x1280 */
+				clock-frequency = <266000000>;
+				hactive = <800>;
+				vactive = <1280>;
+				hfront-porch = <11>;
+				hback-porch = <3>;
+				hsync-len = <2>;
+				vback-porch = <11>;
+				vfront-porch = <3>;
+				vsync-len = <2>;
+			};
 		};
 	};
 
