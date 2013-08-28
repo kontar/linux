@@ -512,6 +512,9 @@
 		samsung,color-depth = <1>;
 		samsung,link-rate = <0x0a>;
 		samsung,lane-count = <4>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&dp_hpd>;
 		lcd_bl_gpio = <&gpb2 0 1>;
 		lcd_en_gpio = <&gpx1 5 1>;
 	};
