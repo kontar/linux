@@ -28,13 +28,7 @@
 
 #include <linux/arm-cci.h>
 
-#include "spc.h"
-
-/* SCC conf registers */
-#define A15_CONF		0x400
-#define A7_CONF			0x500
-#define SYS_INFO		0x700
-#define SPC_BASE		0xb00
+#include <linux/vexpress.h>
 
 /*
  * We can't use regular spinlocks. In the switcher case, it is possible
@@ -47,8 +41,6 @@ static arch_spinlock_t tc2_pm_lock = __ARCH_SPIN_LOCK_UNLOCKED;
 #define TC2_CLUSTERS			2
 #define TC2_MAX_CPUS_PER_CLUSTER	3
 
-static unsigned int tc2_nr_cpus[TC2_CLUSTERS];
-
 /* Keep per-cpu usage count to cope with unordered up/down requests */
 static int tc2_pm_use_count[TC2_MAX_CPUS_PER_CLUSTER][TC2_CLUSTERS];
 
@@ -60,7 +52,7 @@ static int tc2_pm_use_count[TC2_MAX_CPUS_PER_CLUSTER][TC2_CLUSTERS];
 static int tc2_pm_power_up(unsigned int cpu, unsigned int cluster)
 {
 	pr_debug("%s: cpu %u cluster %u\n", __func__, cpu, cluster);
-	if (cluster >= TC2_CLUSTERS || cpu >= tc2_nr_cpus[cluster])
+	if (cluster >= TC2_CLUSTERS || cpu >= ve_spc_get_nb_cpus(cluster))
 		return -EINVAL;
 
 	/*
@@ -281,7 +273,7 @@ static bool __init tc2_pm_usage_count_init(void)
 	cluster = MPIDR_AFFINITY_LEVEL(mpidr, 1);
 
 	pr_debug("%s: cpu %u cluster %u\n", __func__, cpu, cluster);
-	if (cluster >= TC2_CLUSTERS || cpu >= tc2_nr_cpus[cluster]) {
+	if (cluster >= TC2_CLUSTERS || cpu >= ve_spc_get_nb_cpus(cluster)) {
 		pr_err("%s: boot CPU is out of bound!\n", __func__);
 		return false;
 	}
@@ -303,39 +295,9 @@ static void __naked tc2_pm_power_up_setup(unsigned int affinity_level)
 static int __init tc2_pm_init(void)
 {
 	int ret;
-	void __iomem *scc;
-	u32 a15_cluster_id, a7_cluster_id, sys_info;
-	struct device_node *np;
 
-	/*
-	 * The power management-related features are hidden behind
-	 * SCC registers. We need to extract runtime information like
-	 * cluster ids and number of CPUs really available in clusters.
-	 */
-	np = of_find_compatible_node(NULL, NULL,
-			"arm,vexpress-scc,v2p-ca15_a7");
-	scc = of_iomap(np, 0);
-	if (!scc)
+	if (!ve_spc_check_loaded())
 		return -ENODEV;
-
-	a15_cluster_id = readl_relaxed(scc + A15_CONF) & 0xf;
-	a7_cluster_id = readl_relaxed(scc + A7_CONF) & 0xf;
-	if (a15_cluster_id >= TC2_CLUSTERS || a7_cluster_id >= TC2_CLUSTERS)
-		return -EINVAL;
-
-	sys_info = readl_relaxed(scc + SYS_INFO);
-	tc2_nr_cpus[a15_cluster_id] = (sys_info >> 16) & 0xf;
-	tc2_nr_cpus[a7_cluster_id] = (sys_info >> 20) & 0xf;
-
-	/*
-	 * A subset of the SCC registers is also used to communicate
-	 * with the SPC (power controller). We need to be able to
-	 * drive it very early in the boot process to power up
-	 * processors, so we initialize the SPC driver here.
-	 */
-	ret = ve_spc_init(scc + SPC_BASE, a15_cluster_id);
-	if (ret)
-		return ret;
 
 	if (!cci_probed())
 		return -ENODEV;
