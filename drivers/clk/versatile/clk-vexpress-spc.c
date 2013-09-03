@@ -36,7 +36,7 @@ static unsigned long spc_recalc_rate(struct clk_hw *hw,
 	struct clk_spc *spc = to_clk_spc(hw);
 	u32 freq;
 
-	if (vexpress_spc_get_performance(spc->cluster, &freq)) {
+	if (ve_spc_get_performance(spc->cluster, &freq)) {
 		return -EIO;
 		pr_err("%s: Failed", __func__);
 	}
@@ -55,7 +55,7 @@ static int spc_set_rate(struct clk_hw *hw, unsigned long rate,
 {
 	struct clk_spc *spc = to_clk_spc(hw);
 
-	return vexpress_spc_set_performance(spc->cluster, rate / 1000);
+	return ve_spc_set_performance(spc->cluster, rate / 1000);
 }
 
 static struct clk_ops clk_spc_ops = {
@@ -108,7 +108,7 @@ void __init vexpress_clk_of_register_spc(void)
 	const u32 *val;
 	int cluster_id = 0, len;
 
-	if (!of_find_compatible_node(NULL, NULL, "arm,vexpress-spc")) {
+	if (!of_find_compatible_node(NULL, NULL, "arm,vexpress-scc")) {
 		pr_debug("%s: No SPC found, Exiting!!\n", __func__);
 		return;
 	}
@@ -127,5 +127,5 @@ void __init vexpress_clk_of_register_spc(void)
 		clk_register_clkdev(clk, NULL, name);
 	}
 }
-CLK_OF_DECLARE(spc, "arm,vexpress-spc", vexpress_clk_of_register_spc);
+CLK_OF_DECLARE(spc, "arm,vexpress-scc", vexpress_clk_of_register_spc);
 #endif
