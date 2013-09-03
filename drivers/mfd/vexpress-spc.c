@@ -119,13 +119,13 @@ static bool ve_spc_initialized(void)
 }
 
 /**
- * ve_spc_write_resume_reg() - set the jump address used for warm boot
+ * ve_spc_set_resume_addr() - set the jump address used for warm boot
  *
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  * @cpu: mpidr[7:0] bitfield describing cpu affinity level
  * @addr: physical resume address
  */
-void ve_spc_write_resume_reg(u32 cluster, u32 cpu, u32 addr)
+void ve_spc_set_resume_addr(u32 cluster, u32 cpu, u32 addr)
 {
 	void __iomem *baseaddr;
 
@@ -250,7 +250,7 @@ static inline void reg_bitmask(u32 *reg, u32 mask, bool set)
 }
 
 /**
- * ve_spc_set_global_wakeup_intr()
+ * ve_global_wakeup_irq()
  *
  * Function to set/clear global wakeup IRQs. Not protected by locking since
  * it might be used in code paths where normal cacheable locks are not
@@ -258,7 +258,7 @@ static inline void reg_bitmask(u32 *reg, u32 mask, bool set)
  *
  * @set: if true, global wake-up IRQs are set, if false they are cleared
  */
-void ve_spc_set_global_wakeup_intr(bool set)
+void ve_spc_global_wakeup_irq(bool set)
 {
 	u32 wake_int_mask_reg = 0;
 
@@ -268,17 +268,17 @@ void ve_spc_set_global_wakeup_intr(bool set)
 }
 
 /**
- * ve_spc_set_cpu_wakeup_irq()
+ * ve_cpu_wakeup_irq()
  *
  * Function to set/clear per-CPU wake-up IRQs. Not protected by locking since
  * it might be used in code paths where normal cacheable locks are not
  * working. Locking must be provided by the caller to ensure atomicity.
  *
- * @cpu: mpidr[7:0] bitfield describing cpu affinity level
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
+ * @cpu: mpidr[7:0] bitfield describing cpu affinity level
  * @set: if true, wake-up IRQs are set, if false they are cleared
  */
-void ve_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster, bool set)
+void ve_spc_cpu_wakeup_irq(u32 cluster, u32 cpu, bool set)
 {
 	u32 mask = 0;
 	u32 wake_int_mask_reg = 0;
@@ -293,7 +293,7 @@ void ve_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster, bool set)
 }
 
 /**
- * ve_spc_powerdown_enable()
+ * ve_spc_powerdown()
  *
  * Function to enable/disable cluster powerdown. Not protected by locking
  * since it might be used in code paths where normal cacheable locks are not
@@ -302,7 +302,7 @@ void ve_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster, bool set)
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  * @enable: if true enables powerdown, if false disables it
  */
-void ve_spc_powerdown_enable(u32 cluster, bool enable)
+void ve_spc_powerdown(u32 cluster, bool enable)
 {
 	u32 pwdrn_reg = 0;
 
@@ -504,8 +504,8 @@ struct vexpress_config_bridge_info ve_spc_config_bridge_info = {
 };
 
 static const struct of_device_id ve_spc_ids[] __initconst = {
-	{ .compatible = "arm,vexpress-spc,v2p-ca15_a7" },
-	{ .compatible = "arm,vexpress-spc" },
+	{ .compatible = "arm,vexpress-scc,v2p-ca15_a7" },
+	{ .compatible = "arm,vexpress-scc" },
 	{},
 };
 
