@@ -15,7 +15,7 @@
 #ifndef _EXYNOS_MIPI_DSIM_H
 #define _EXYNOS_MIPI_DSIM_H
 
-#include <linux/device.h>
+#include <linux/platform_device.h>
 #include <linux/fb.h>
 
 #define PANEL_NAME_SIZE		(32)
@@ -229,6 +229,7 @@ struct mipi_dsim_device {
 	struct mipi_dsim_master_ops	*master_ops;
 	struct mipi_dsim_lcd_device	*dsim_lcd_dev;
 	struct mipi_dsim_lcd_driver	*dsim_lcd_drv;
+	struct mipi_dsim_phy_config	*dsim_phy_config;
 
 	unsigned int			state;
 	unsigned int			data_lane;
@@ -291,6 +292,32 @@ struct mipi_dsim_master_ops {
 	void (*trigger)(struct fb_info *info);
 	int (*set_early_blank_mode)(struct mipi_dsim_device *dsim, int power);
 	int (*set_blank_mode)(struct mipi_dsim_device *dsim, int power);
+};
+
+/*
+ * phy node structure for mipi-dsim.
+ *
+ * @reg_enable_dphy : base address to memory mapped D-PHY enable register
+ * @ctrl_bit_enable : control bit for enabling D-PHY
+ * @reg_reset_dphy  : base address to memory mapped D-PHY reset register
+ * @ctrl_bit_reset  : control bit for resetting D-PHY
+ */
+struct mipi_dsim_phy_config_type1 {
+	void __iomem	*reg_enable_dphy;
+	int		ctrlbit_enable_dphy;
+	void __iomem	*reg_reset_dsim;
+	int		ctrlbit_reset_dsim;
+};
+
+enum mipi_dsim_phy_config_type {
+	MIPI_DSIM_PHY_CONFIG_TYPE1,
+};
+
+struct mipi_dsim_phy_config {
+	enum mipi_dsim_phy_config_type type;
+	union {
+		struct mipi_dsim_phy_config_type1 phy_cfg_type1;
+	};
 };
 
 /*

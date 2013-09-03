@@ -17,6 +17,7 @@
 #include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <linux/of_device.h>
+#include <linux/of_address.h>
 #include <linux/pm_runtime.h>
 
 #include <video/of_display_timing.h>
@@ -101,9 +102,12 @@ struct fimd_context {
 	struct exynos_drm_subdrv	subdrv;
 	int				irq;
 	struct drm_crtc			*crtc;
+	struct clk			*sclk_mout_fimd;
+	struct clk			*fimd_mux_clk;
 	struct clk			*bus_clk;
 	struct clk			*lcd_clk;
 	void __iomem			*regs;
+	void __iomem                    *sys_reg;
 	struct fimd_win_data		win_data[WINDOWS_NR];
 	unsigned int			clkdiv;
 	unsigned int			default_win;
@@ -784,6 +788,7 @@ static int fimd_calc_clkdiv(struct fimd_context *ctx,
 		}
 	}
 
+	clkdiv = 5;
 	return clkdiv;
 }
 
@@ -859,6 +864,7 @@ static int fimd_activate(struct fimd_context *ctx, bool enable)
 		if (ret < 0)
 			return ret;
 
+		writel((3 << 0), ctx->regs + 0x27c);
 		ctx->suspended = false;
 
 		/* if vblank was enabled status, enable it again. */
@@ -884,6 +890,7 @@ static int fimd_probe(struct platform_device *pdev)
 	struct exynos_drm_fimd_pdata *pdata;
 	struct exynos_drm_panel_info *panel;
 	struct resource *res;
+	struct device_node *sys_reg_node;
 	int win;
 	int ret = -EINVAL;
 
@@ -929,6 +936,24 @@ static int fimd_probe(struct platform_device *pdev)
 		dev_err(dev, "failed to get lcd clock\n");
 		return PTR_ERR(ctx->lcd_clk);
 	}
+
+	/* Set the parent for FIMD pixel clock */
+	ctx->fimd_mux_clk = devm_clk_get(dev, "mout_fimd");
+	if (IS_ERR(ctx->fimd_mux_clk)) {
+		dev_err(dev, "failed to get fimd mux clk\n");
+		return PTR_ERR(ctx->fimd_mux_clk);
+	}
+
+	ctx->sclk_mout_fimd = devm_clk_get(dev, "sclk_mout_fimd");
+	if (IS_ERR(ctx->sclk_mout_fimd)) {
+		dev_err(dev, "failed to get mout_fimd parent\n");
+		return PTR_ERR(ctx->sclk_mout_fimd);
+	}
+
+	clk_set_parent(ctx->fimd_mux_clk, ctx->sclk_mout_fimd);
+
+	/* Set the FIMD pixel clock to desired value */
+	clk_set_rate(ctx->lcd_clk, (1000 * PICOS2KHZ(panel->timing.pixclock)));
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
@@ -983,6 +1008,19 @@ static int fimd_probe(struct platform_device *pdev)
 		fimd_clear_win(ctx, win);
 
 	exynos_drm_subdrv_register(subdrv);
+
+	sys_reg_node = of_parse_phandle(dev->of_node, "samsung,sys-reg", 0);
+
+	if(!sys_reg_node)
+		return -EINVAL;
+
+	ctx->sys_reg = of_iomap(sys_reg_node, 0);
+	if (!ctx->sys_reg)
+		return -EINVAL;
+
+	writel(((1 << 15) | readl(ctx->sys_reg + 0x214)), ctx->sys_reg + 0x214);
+
+	writel((3 << 0), ctx->regs + 0x27c);
 
 	return 0;
 }

@@ -23,6 +23,11 @@
 		reg = <0x10000000 0x100>;
 	};
 
+	sys_reg: sysreg {
+		compatible = "samsung,exynos5-sysreg";
+		reg = <0x10050000 0x2000>;
+       };
+
 	combiner:interrupt-controller@10440000 {
 		compatible = "samsung,exynos4210-combiner";
 		#interrupt-cells = <2>;
