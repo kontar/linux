@@ -141,36 +141,36 @@ void vexpress_clk_of_init(void);
 #define	VEXPRESS_SPC_WAKE_INTR_MASK		0xFFF
 
 #ifdef CONFIG_VEXPRESS_SPC
-extern bool vexpress_spc_check_loaded(void);
-extern void vexpress_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster, bool set);
-extern void vexpress_spc_set_global_wakeup_intr(bool set);
-extern int vexpress_spc_get_freq_table(u32 cluster, u32 **fptr);
-extern int vexpress_spc_get_performance(u32 cluster, u32 *freq);
-extern int vexpress_spc_set_performance(u32 cluster, u32 freq);
-extern void vexpress_spc_write_resume_reg(u32 cluster, u32 cpu, u32 addr);
-extern int vexpress_spc_get_nb_cpus(u32 cluster);
-extern void vexpress_spc_powerdown_enable(u32 cluster, bool enable);
+extern bool ve_spc_check_loaded(void);
+extern void ve_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster, bool set);
+extern void ve_spc_set_global_wakeup_intr(bool set);
+extern int ve_spc_get_freq_table(u32 cluster, u32 **fptr);
+extern int ve_spc_get_performance(u32 cluster, u32 *freq);
+extern int ve_spc_set_performance(u32 cluster, u32 freq);
+extern void ve_spc_write_resume_reg(u32 cluster, u32 cpu, u32 addr);
+extern int ve_spc_get_nb_cpus(u32 cluster);
+extern void ve_spc_powerdown_enable(u32 cluster, bool enable);
 #else
-static inline bool vexpress_spc_check_loaded(void) { return false; }
-static inline void vexpress_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster,
+static inline bool ve_spc_check_loaded(void) { return false; }
+static inline void ve_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster,
 						   bool set) { }
-static inline void vexpress_spc_set_global_wakeup_intr(bool set) { }
-static inline int vexpress_spc_get_freq_table(u32 cluster, u32 **fptr)
+static inline void ve_spc_set_global_wakeup_intr(bool set) { }
+static inline int ve_spc_get_freq_table(u32 cluster, u32 **fptr)
 {
 	return -ENODEV;
 }
-static inline int vexpress_spc_get_performance(u32 cluster, u32 *freq)
+static inline int ve_spc_get_performance(u32 cluster, u32 *freq)
 {
 	return -ENODEV;
 }
-static inline int vexpress_spc_set_performance(u32 cluster, u32 freq)
+static inline int ve_spc_set_performance(u32 cluster, u32 freq)
 {
 	return -ENODEV;
 }
-static inline void vexpress_spc_write_resume_reg(u32 cluster,
+static inline void ve_spc_write_resume_reg(u32 cluster,
 						 u32 cpu, u32 addr) { }
-static inline int vexpress_spc_get_nb_cpus(u32 cluster) { return -ENODEV; }
-static inline void vexpress_spc_powerdown_enable(u32 cluster, bool enable) { }
+static inline int ve_spc_get_nb_cpus(u32 cluster) { return -ENODEV; }
+static inline void ve_spc_powerdown_enable(u32 cluster, bool enable) { }
 #endif
 
 #endif
