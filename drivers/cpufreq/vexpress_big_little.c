@@ -33,7 +33,7 @@ static int vexpress_init_opp_table(struct device *cpu_dev)
 	u32 *table;
 	int ret;
 
-	count = vexpress_spc_get_freq_table(cluster, &table);
+	count = ve_spc_get_freq_table(cluster, &table);
 	if (!table || !count) {
 		pr_err("SPC controller returned invalid freq table");
 		return -EINVAL;
@@ -66,7 +66,7 @@ static struct cpufreq_arm_bL_ops vexpress_bL_ops = {
 
 static int vexpress_bL_init(void)
 {
-	if (!vexpress_spc_check_loaded()) {
+	if (!ve_spc_check_loaded()) {
 		pr_info("%s: No SPC found\n", __func__);
 		return -ENOENT;
 	}
