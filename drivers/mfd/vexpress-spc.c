@@ -86,7 +86,7 @@ enum {
 #define STAT_ERR(type)		((1 << 1) << (type << 2))
 #define RESPONSE_MASK(type)	(STAT_COMPLETE(type) | STAT_ERR(type))
 
-struct vexpress_spc_drvdata {
+struct ve_spc_drvdata {
 	void __iomem *baseaddr;
 	u32 a15_clusid;
 	int irq;
@@ -100,32 +100,32 @@ enum spc_func_type {
 	PERF_FUNC   = 1,
 };
 
-struct vexpress_spc_func {
+struct ve_spc_func {
 	enum spc_func_type type;
 	u32 function;
 	u32 device;
 };
 
-static struct vexpress_spc_drvdata *info;
-static u32 *vexpress_spc_config_data;
-static struct vexpress_config_bridge *vexpress_spc_config_bridge;
+static struct ve_spc_drvdata *info;
+static u32 *ve_spc_config_data;
+static struct vexpress_config_bridge *ve_spc_config_bridge;
 static struct vexpress_config_func *opp_func, *perf_func;
 
-static int vexpress_spc_load_result = -EAGAIN;
+static int ve_spc_load_result = -EAGAIN;
 
-static bool vexpress_spc_initialized(void)
+static bool ve_spc_initialized(void)
 {
-	return vexpress_spc_load_result == 0;
+	return ve_spc_load_result == 0;
 }
 
 /**
- * vexpress_spc_write_resume_reg() - set the jump address used for warm boot
+ * ve_spc_write_resume_reg() - set the jump address used for warm boot
  *
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  * @cpu: mpidr[7:0] bitfield describing cpu affinity level
  * @addr: physical resume address
  */
-void vexpress_spc_write_resume_reg(u32 cluster, u32 cpu, u32 addr)
+void ve_spc_write_resume_reg(u32 cluster, u32 cpu, u32 addr)
 {
 	void __iomem *baseaddr;
 
@@ -141,14 +141,14 @@ void vexpress_spc_write_resume_reg(u32 cluster, u32 cpu, u32 addr)
 }
 
 /**
- * vexpress_spc_get_nb_cpus() - get number of cpus in a cluster
+ * ve_spc_get_nb_cpus() - get number of cpus in a cluster
  *
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  *
  * Return: number of cpus in the cluster
  *         -EINVAL if cluster number invalid
  */
-int vexpress_spc_get_nb_cpus(u32 cluster)
+int ve_spc_get_nb_cpus(u32 cluster)
 {
 	u32 val;
 
@@ -159,22 +159,22 @@ int vexpress_spc_get_nb_cpus(u32 cluster)
 	val = (cluster != info->a15_clusid) ? (val >> 20) : (val >> 16);
 	return val & 0xf;
 }
-EXPORT_SYMBOL_GPL(vexpress_spc_get_nb_cpus);
+EXPORT_SYMBOL_GPL(ve_spc_get_nb_cpus);
 
 /**
- * vexpress_spc_get_performance - get current performance level of cluster
+ * ve_spc_get_performance - get current performance level of cluster
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  * @freq: pointer to the performance level to be assigned
  *
  * Return: 0 on success
  *         < 0 on read error
  */
-int vexpress_spc_get_performance(u32 cluster, u32 *freq)
+int ve_spc_get_performance(u32 cluster, u32 *freq)
 {
 	u32 perf_cfg_reg;
 	int perf, ret;
 
-	if (!vexpress_spc_initialized() || (cluster >= MAX_CLUSTERS))
+	if (!ve_spc_initialized() || (cluster >= MAX_CLUSTERS))
 		return -EINVAL;
 
 	perf_cfg_reg = cluster != info->a15_clusid ? PERF_LVL_A7 : PERF_LVL_A15;
@@ -185,10 +185,10 @@ int vexpress_spc_get_performance(u32 cluster, u32 *freq)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(vexpress_spc_get_performance);
+EXPORT_SYMBOL_GPL(ve_spc_get_performance);
 
 /**
- * vexpress_spc_get_perf_index - get performance level corresponding to
+ * ve_spc_get_perf_index - get performance level corresponding to
  *				 a frequency
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  * @freq: frequency to be looked-up
@@ -196,7 +196,7 @@ EXPORT_SYMBOL_GPL(vexpress_spc_get_performance);
  * Return: perf level index on success
  *         -EINVAL on error
  */
-static int vexpress_spc_find_perf_index(u32 cluster, u32 freq)
+static int ve_spc_find_perf_index(u32 cluster, u32 freq)
 {
 	int idx;
 
@@ -207,7 +207,7 @@ static int vexpress_spc_find_perf_index(u32 cluster, u32 freq)
 }
 
 /**
- * vexpress_spc_set_performance - set current performance level of cluster
+ * ve_spc_set_performance - set current performance level of cluster
  *
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  * @freq: performance level to be programmed
@@ -215,16 +215,16 @@ static int vexpress_spc_find_perf_index(u32 cluster, u32 freq)
  * Returns: 0 on success
  *          < 0 on write error
  */
-int vexpress_spc_set_performance(u32 cluster, u32 freq)
+int ve_spc_set_performance(u32 cluster, u32 freq)
 {
 	int ret, perf, offset;
 
-	if (!vexpress_spc_initialized() || (cluster >= MAX_CLUSTERS))
+	if (!ve_spc_initialized() || (cluster >= MAX_CLUSTERS))
 		return -EINVAL;
 
 	offset = (cluster != info->a15_clusid) ? PERF_LVL_A7 : PERF_LVL_A15;
 
-	perf = vexpress_spc_find_perf_index(cluster, freq);
+	perf = ve_spc_find_perf_index(cluster, freq);
 
 	if (perf < 0 || perf >= MAX_OPPS)
 		return -EINVAL;
@@ -233,9 +233,9 @@ int vexpress_spc_set_performance(u32 cluster, u32 freq)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(vexpress_spc_set_performance);
+EXPORT_SYMBOL_GPL(ve_spc_set_performance);
 
-static void vexpress_spc_set_wake_intr(u32 mask)
+static void ve_spc_set_wake_intr(u32 mask)
 {
 	writel_relaxed(mask & VEXPRESS_SPC_WAKE_INTR_MASK,
 		       info->baseaddr + WAKE_INT_MASK);
@@ -250,7 +250,7 @@ static inline void reg_bitmask(u32 *reg, u32 mask, bool set)
 }
 
 /**
- * vexpress_spc_set_global_wakeup_intr()
+ * ve_spc_set_global_wakeup_intr()
  *
  * Function to set/clear global wakeup IRQs. Not protected by locking since
  * it might be used in code paths where normal cacheable locks are not
@@ -258,17 +258,17 @@ static inline void reg_bitmask(u32 *reg, u32 mask, bool set)
  *
  * @set: if true, global wake-up IRQs are set, if false they are cleared
  */
-void vexpress_spc_set_global_wakeup_intr(bool set)
+void ve_spc_set_global_wakeup_intr(bool set)
 {
 	u32 wake_int_mask_reg = 0;
 
 	wake_int_mask_reg = readl_relaxed(info->baseaddr + WAKE_INT_MASK);
 	reg_bitmask(&wake_int_mask_reg, GBL_WAKEUP_INT_MSK, set);
-	vexpress_spc_set_wake_intr(wake_int_mask_reg);
+	ve_spc_set_wake_intr(wake_int_mask_reg);
 }
 
 /**
- * vexpress_spc_set_cpu_wakeup_irq()
+ * ve_spc_set_cpu_wakeup_irq()
  *
  * Function to set/clear per-CPU wake-up IRQs. Not protected by locking since
  * it might be used in code paths where normal cacheable locks are not
@@ -278,7 +278,7 @@ void vexpress_spc_set_global_wakeup_intr(bool set)
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  * @set: if true, wake-up IRQs are set, if false they are cleared
  */
-void vexpress_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster, bool set)
+void ve_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster, bool set)
 {
 	u32 mask = 0;
 	u32 wake_int_mask_reg = 0;
@@ -289,11 +289,11 @@ void vexpress_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster, bool set)
 
 	wake_int_mask_reg = readl_relaxed(info->baseaddr + WAKE_INT_MASK);
 	reg_bitmask(&wake_int_mask_reg, mask, set);
-	vexpress_spc_set_wake_intr(wake_int_mask_reg);
+	ve_spc_set_wake_intr(wake_int_mask_reg);
 }
 
 /**
- * vexpress_spc_powerdown_enable()
+ * ve_spc_powerdown_enable()
  *
  * Function to enable/disable cluster powerdown. Not protected by locking
  * since it might be used in code paths where normal cacheable locks are not
@@ -302,7 +302,7 @@ void vexpress_spc_set_cpu_wakeup_irq(u32 cpu, u32 cluster, bool set)
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  * @enable: if true enables powerdown, if false disables it
  */
-void vexpress_spc_powerdown_enable(u32 cluster, bool enable)
+void ve_spc_powerdown_enable(u32 cluster, bool enable)
 {
 	u32 pwdrn_reg = 0;
 
@@ -312,7 +312,7 @@ void vexpress_spc_powerdown_enable(u32 cluster, bool enable)
 	writel_relaxed(enable, info->baseaddr + pwdrn_reg);
 }
 
-irqreturn_t vexpress_spc_irq_handler(int irq, void *data)
+irqreturn_t ve_spc_irq_handler(int irq, void *data)
 {
 	int ret;
 	u32 status = readl_relaxed(info->baseaddr + PWC_STATUS);
@@ -321,15 +321,15 @@ irqreturn_t vexpress_spc_irq_handler(int irq, void *data)
 		return IRQ_NONE;
 
 	if ((status == STAT_COMPLETE(SYS_CFGCTRL_TYPE))
-			&& vexpress_spc_config_data) {
-		*vexpress_spc_config_data =
+			&& ve_spc_config_data) {
+		*ve_spc_config_data =
 				readl_relaxed(info->baseaddr + SYS_CFG_RDATA);
-		vexpress_spc_config_data = NULL;
+		ve_spc_config_data = NULL;
 	}
 
 	ret = STAT_COMPLETE(info->cur_req_type) ? 0 : -EIO;
 	info->cur_req_type = INVALID_TYPE;
-	vexpress_config_complete(vexpress_spc_config_bridge, ret);
+	vexpress_config_complete(ve_spc_config_bridge, ret);
 	return IRQ_HANDLED;
 }
 
@@ -356,14 +356,14 @@ static inline int __get_mult_factor(void)
 }
 
 /**
- * vexpress_spc_populate_opps() - initialize opp tables from microcontroller
+ * ve_spc_populate_opps() - initialize opp tables from microcontroller
  *
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
  *
  * Return: 0 on success
  *         < 0 on error
  */
-static int vexpress_spc_populate_opps(u32 cluster)
+static int ve_spc_populate_opps(u32 cluster)
 {
 	u32 data = 0, ret, i, offset;
 	int mult_fact = __get_mult_factor();
@@ -385,7 +385,7 @@ static int vexpress_spc_populate_opps(u32 cluster)
 }
 
 /**
- * vexpress_spc_get_freq_table() - Retrieve a pointer to the frequency
+ * ve_spc_get_freq_table() - Retrieve a pointer to the frequency
  *				   table for a given cluster
  *
  * @cluster: mpidr[15:8] bitfield describing cluster affinity level
@@ -393,19 +393,19 @@ static int vexpress_spc_populate_opps(u32 cluster)
  * Return: operating points count on success
  *         -EINVAL on pointer error
  */
-int vexpress_spc_get_freq_table(u32 cluster, u32 **fptr)
+int ve_spc_get_freq_table(u32 cluster, u32 **fptr)
 {
 	if (WARN_ON_ONCE(!fptr || cluster >= MAX_CLUSTERS))
 		return -EINVAL;
 	*fptr = info->freqs[cluster];
 	return info->freqs_cnt[cluster];
 }
-EXPORT_SYMBOL_GPL(vexpress_spc_get_freq_table);
+EXPORT_SYMBOL_GPL(ve_spc_get_freq_table);
 
-static void *vexpress_spc_func_get(struct device *dev,
+static void *ve_spc_func_get(struct device *dev,
 		struct device_node *node, const char *id)
 {
-	struct vexpress_spc_func *spc_func;
+	struct ve_spc_func *spc_func;
 	u32 func_device[2];
 	int err = 0;
 
@@ -443,15 +443,15 @@ static void *vexpress_spc_func_get(struct device *dev,
 	return spc_func;
 }
 
-static void vexpress_spc_func_put(void *func)
+static void ve_spc_func_put(void *func)
 {
 	kfree(func);
 }
 
-static int vexpress_spc_func_exec(void *func, int offset, bool write,
+static int ve_spc_func_exec(void *func, int offset, bool write,
 				  u32 *data)
 {
-	struct vexpress_spc_func *spc_func = func;
+	struct ve_spc_func *spc_func = func;
 	u32 command;
 
 	if (!data)
@@ -485,7 +485,7 @@ static int vexpress_spc_func_exec(void *func, int offset, bool write,
 		pr_debug("command %x\n", command);
 
 		if (!write)
-			vexpress_spc_config_data = data;
+			ve_spc_config_data = data;
 		else
 			writel_relaxed(*data, info->baseaddr + SYS_CFG_WDATA);
 		writel_relaxed(command, info->baseaddr + SYS_CFGCTRL);
@@ -496,24 +496,24 @@ static int vexpress_spc_func_exec(void *func, int offset, bool write,
 	}
 }
 
-struct vexpress_config_bridge_info vexpress_spc_config_bridge_info = {
+struct vexpress_config_bridge_info ve_spc_config_bridge_info = {
 	.name = "vexpress-spc",
-	.func_get = vexpress_spc_func_get,
-	.func_put = vexpress_spc_func_put,
-	.func_exec = vexpress_spc_func_exec,
+	.func_get = ve_spc_func_get,
+	.func_put = ve_spc_func_put,
+	.func_exec = ve_spc_func_exec,
 };
 
-static const struct of_device_id vexpress_spc_ids[] __initconst = {
+static const struct of_device_id ve_spc_ids[] __initconst = {
 	{ .compatible = "arm,vexpress-spc,v2p-ca15_a7" },
 	{ .compatible = "arm,vexpress-spc" },
 	{},
 };
 
-static int __init vexpress_spc_init(void)
+static int __init ve_spc_init(void)
 {
 	int ret;
 	struct device_node *node = of_find_matching_node(NULL,
-							 vexpress_spc_ids);
+							 ve_spc_ids);
 
 	if (!node)
 		return -ENODEV;
@@ -540,7 +540,7 @@ static int __init vexpress_spc_init(void)
 
 	readl_relaxed(info->baseaddr + PWC_STATUS);
 
-	ret = request_irq(info->irq, vexpress_spc_irq_handler,
+	ret = request_irq(info->irq, ve_spc_irq_handler,
 		IRQF_DISABLED | IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
 		"arm-spc", info);
 
@@ -552,24 +552,24 @@ static int __init vexpress_spc_init(void)
 
 	info->a15_clusid = readl_relaxed(info->baseaddr + A15_CONF) & 0xf;
 
-	vexpress_spc_config_bridge = vexpress_config_bridge_register(
-			node, &vexpress_spc_config_bridge_info);
+	ve_spc_config_bridge = vexpress_config_bridge_register(
+			node, &ve_spc_config_bridge_info);
 
-	if (WARN_ON(!vexpress_spc_config_bridge)) {
+	if (WARN_ON(!ve_spc_config_bridge)) {
 		ret = -ENODEV;
 		goto unmap;
 	}
 
-	opp_func = vexpress_config_func_get(vexpress_spc_config_bridge, "opp");
+	opp_func = vexpress_config_func_get(ve_spc_config_bridge, "opp");
 	perf_func =
-		vexpress_config_func_get(vexpress_spc_config_bridge, "perf");
+		vexpress_config_func_get(ve_spc_config_bridge, "perf");
 
 	if (!opp_func || !perf_func) {
 		ret = -ENODEV;
 		goto unmap;
 	}
 
-	if (vexpress_spc_populate_opps(0) || vexpress_spc_populate_opps(1)) {
+	if (ve_spc_populate_opps(0) || ve_spc_populate_opps(1)) {
 		if (info->irq)
 			free_irq(info->irq, info);
 		pr_err("failed to build OPP table\n");
@@ -593,19 +593,19 @@ mem_free:
 	return ret;
 }
 
-static bool __init __vexpress_spc_check_loaded(void);
+static bool __init __ve_spc_check_loaded(void);
 /*
  * Pointer spc_check_loaded is swapped after init hence it is safe
  * to initialize it to a function in the __init section
  */
-static bool (*spc_check_loaded)(void) __refdata = &__vexpress_spc_check_loaded;
+static bool (*spc_check_loaded)(void) __refdata = &__ve_spc_check_loaded;
 
-static bool __init __vexpress_spc_check_loaded(void)
+static bool __init __ve_spc_check_loaded(void)
 {
-	if (vexpress_spc_load_result == -EAGAIN)
-		vexpress_spc_load_result = vexpress_spc_init();
-	spc_check_loaded = &vexpress_spc_initialized;
-	return vexpress_spc_initialized();
+	if (ve_spc_load_result == -EAGAIN)
+		ve_spc_load_result = ve_spc_init();
+	spc_check_loaded = &ve_spc_initialized;
+	return ve_spc_initialized();
 }
 
 /*
@@ -617,17 +617,17 @@ static bool __init __vexpress_spc_check_loaded(void)
  * modules, when early boot init functions have been
  * already freed from kernel address space.
  */
-bool vexpress_spc_check_loaded(void)
+bool ve_spc_check_loaded(void)
 {
 	return spc_check_loaded();
 }
-EXPORT_SYMBOL_GPL(vexpress_spc_check_loaded);
+EXPORT_SYMBOL_GPL(ve_spc_check_loaded);
 
-static int __init vexpress_spc_early_init(void)
+static int __init ve_spc_early_init(void)
 {
-	__vexpress_spc_check_loaded();
-	return vexpress_spc_load_result;
+	__ve_spc_check_loaded();
+	return ve_spc_load_result;
 }
-early_initcall(vexpress_spc_early_init);
+early_initcall(ve_spc_early_init);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Serial Power Controller (SPC) support");
