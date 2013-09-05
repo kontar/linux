@@ -1,14 +1,22 @@
 /*
- * ARM Ltd.
+ * ARM Ltd. Fast Models
  *
- * ARMv8 Foundation model DTS
+ * Architecture Envelope Model (AEM) ARMv8-A
+ * ARMAEMv8AMPCT
+ *
+ * RTSM_VE_AEMv8A.lisa
  */
 
 /dts-v1/;
 
+/memreserve/ 0x80000000 0x00010000;
+
 / {
-	model = "Foundation-v8A";
-	compatible = "arm,foundation-aarch64", "arm,vexpress";
+};
+
+/ {
+	model = "V2P-AARCH64";
+	compatible = "arm,vexpress,v2p-aarch64", "arm,vexpress";
 	interrupt-parent = <&gic>;
 	#address-cells = <2>;
 	#size-cells = <2>;
@@ -92,11 +100,10 @@
 	};
 
 	smb {
-		compatible = "arm,vexpress,v2m-p1", "simple-bus";
-		arm,v2m-memory-map = "rs1";
-		#address-cells = <2>; /* SMB chipselect number and offset */
-		#size-cells = <1>;
+		compatible = "simple-bus";
 
+		#address-cells = <2>;
+		#size-cells = <1>;
 		ranges = <0 0 0 0x08000000 0x04000000>,
 			 <1 0 0 0x14000000 0x04000000>,
 			 <2 0 0 0x18000000 0x04000000>,
@@ -150,81 +157,50 @@
 				<0 0 41 &gic 0 41 4>,
 				<0 0 42 &gic 0 42 4>;
 
-		ethernet@2,02000000 {
-			compatible = "smsc,lan91c111";
-			reg = <2 0x02000000 0x10000>;
-			interrupts = <15>;
+		/include/ "rtsm_ve-motherboard.dtsi"
+	};
+
+	panels {
+		panel@0 {
+			compatible	= "panel";
+			mode		= "VGA";
+			refresh		= <60>;
+			xres		= <640>;
+			yres		= <480>;
+			pixclock	= <39721>;
+			left_margin	= <40>;
+			right_margin	= <24>;
+			upper_margin	= <32>;
+			lower_margin	= <11>;
+			hsync_len	= <96>;
+			vsync_len	= <2>;
+			sync		= <0>;
+			vmode		= "FB_VMODE_NONINTERLACED";
+			tim2		= "TIM2_BCD", "TIM2_IPC";
+			cntl		= "CNTL_LCDTFT", "CNTL_BGR", "CNTL_LCDVCOMP(1)";
+			caps		= "CLCD_CAP_5551", "CLCD_CAP_565", "CLCD_CAP_888";
+			bpp		= <16>;
 		};
 
-		v2m_clk24mhz: clk24mhz {
-			compatible = "fixed-clock";
-			#clock-cells = <0>;
-			clock-frequency = <24000000>;
-			clock-output-names = "v2m:clk24mhz";
-		};
-
-		v2m_refclk1mhz: refclk1mhz {
-			compatible = "fixed-clock";
-			#clock-cells = <0>;
-			clock-frequency = <1000000>;
-			clock-output-names = "v2m:refclk1mhz";
-		};
-
-		v2m_refclk32khz: refclk32khz {
-			compatible = "fixed-clock";
-			#clock-cells = <0>;
-			clock-frequency = <32768>;
-			clock-output-names = "v2m:refclk32khz";
-		};
-
-		iofpga@3,00000000 {
-			compatible = "arm,amba-bus", "simple-bus";
-			#address-cells = <1>;
-			#size-cells = <1>;
-			ranges = <0 3 0 0x200000>;
-
-			v2m_sysreg: sysreg@010000 {
-				compatible = "arm,vexpress-sysreg";
-				reg = <0x010000 0x1000>;
-			};
-
-			v2m_serial0: uart@090000 {
-				compatible = "arm,pl011", "arm,primecell";
-				reg = <0x090000 0x1000>;
-				interrupts = <5>;
-				clocks = <&v2m_clk24mhz>, <&v2m_clk24mhz>;
-				clock-names = "uartclk", "apb_pclk";
-			};
-
-			v2m_serial1: uart@0a0000 {
-				compatible = "arm,pl011", "arm,primecell";
-				reg = <0x0a0000 0x1000>;
-				interrupts = <6>;
-				clocks = <&v2m_clk24mhz>, <&v2m_clk24mhz>;
-				clock-names = "uartclk", "apb_pclk";
-			};
-
-			v2m_serial2: uart@0b0000 {
-				compatible = "arm,pl011", "arm,primecell";
-				reg = <0x0b0000 0x1000>;
-				interrupts = <7>;
-				clocks = <&v2m_clk24mhz>, <&v2m_clk24mhz>;
-				clock-names = "uartclk", "apb_pclk";
-			};
-
-			v2m_serial3: uart@0c0000 {
-				compatible = "arm,pl011", "arm,primecell";
-				reg = <0x0c0000 0x1000>;
-				interrupts = <8>;
-				clocks = <&v2m_clk24mhz>, <&v2m_clk24mhz>;
-				clock-names = "uartclk", "apb_pclk";
-			};
-
-			virtio_block@0130000 {
-				compatible = "virtio,mmio";
-				reg = <0x130000 0x1000>;
-				interrupts = <42>;
-			};
+		panel@1 {
+			compatible	= "panel";
+			mode		= "XVGA";
+			refresh		= <60>;
+			xres		= <1024>;
+			yres		= <768>;
+			pixclock	= <15748>;
+			left_margin	= <152>;
+			right_margin	= <48>;
+			upper_margin	= <23>;
+			lower_margin	= <3>;
+			hsync_len	= <104>;
+			vsync_len	= <4>;
+			sync		= <0>;
+			vmode		= "FB_VMODE_NONINTERLACED";
+			tim2		= "TIM2_BCD", "TIM2_IPC";
+			cntl		= "CNTL_LCDTFT", "CNTL_BGR", "CNTL_LCDVCOMP(1)";
+			caps		= "CLCD_CAP_5551", "CLCD_CAP_565", "CLCD_CAP_888";
+			bpp		= <16>;
 		};
 	};
 };
