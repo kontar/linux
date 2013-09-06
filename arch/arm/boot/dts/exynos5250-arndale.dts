@@ -29,6 +29,29 @@
 		samsung,mfc-l = <0x51000000 0x800000>;
 	};
 
+	i2s0: i2s@03830000 {
+		status = "okay";
+	};
+
+	i2s1: i2s@12D60000 {
+		status = "disabled";
+	};
+
+	i2s2: i2s@12D70000 {
+		status = "disabled";
+	};
+
+	i2s_stub: i2s-stub {
+		compatible = "linux,i2s-stub";
+	};
+
+	sound {
+		compatible = "samsung,smdk-i2s-stub";
+
+		samsung,i2s-controller = <&i2s0>;
+		samsung,audio-codec = <&i2s_stub>;
+	};
+
 	i2c@12C60000 {
 		samsung,i2c-sda-delay = <100>;
 		samsung,i2c-max-bus-freq = <20000>;
@@ -291,7 +314,13 @@
 	};
 
 	i2c@12C80000 {
-		status = "disabled";
+		samsung,i2c-sda-delay = <100>;
+		samsung,i2c-max-bus-freq = <66000>;
+
+		hdmiddc@50 {
+			compatible = "samsung,exynos5-hdmiddc";
+			reg = <0x50>;
+		};
 	};
 
 	i2c@12C90000 {
@@ -314,10 +343,31 @@
 		status = "disabled";
 	};
 
-	i2c@121D0000 {
-		status = "disabled";
+	i2c@12CE0000 {
+		samsung,i2c-sda-delay = <100>;
+		samsung,i2c-max-bus-freq = <66000>;
+
+		hdmiphy@38 {
+			compatible = "samsung,exynos5-hdmiphy";
+			reg = <0x38>;
+		};
 	};
 
+	i2c@121D0000 {
+		samsung,i2c-sda-delay = <100>;
+		samsung,i2c-max-bus-freq = <40000>;
+		samsung,i2c-slave-addr = <0x38>;
+
+		sata-phy {
+			compatible = "samsung,sata-phy";
+			reg = <0x38>;
+		};
+	};
+
+	sata@122F0000 {
+		samsung,sata-freq = <66>;
+	};
+	
 	dwmmc_0: dwmmc0@12200000 {
 		num-slots = <1>;
 		supports-highspeed;
@@ -448,6 +498,22 @@
 		hub-connect = <&gpd1 7 1>;
 	};
 
+	vdd11:fixed-regulator@0 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd11-supply";
+		regulator-min-microvolt = <1100000>;
+		regulator-max-microvolt = <1100000>;
+		regulator-always-on;
+	};
+
+	vdd18:fixed-regulator@1 {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd18-supply";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-always-on;
+	};
+
 	fixed-rate-clocks {
 		xxti {
 			compatible = "samsung,clock-xxti";
@@ -462,6 +528,11 @@
 		samsung,color-depth = <1>;
 		samsung,link-rate = <0x0a>;
 		samsung,lane-count = <4>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&dp_hpd>;
+		lcd_bl_gpio = <&gpb2 0 1>;
+		lcd_en_gpio = <&gpx1 5 1>;
 	};
 
 	fimd: fimd@14400000 {
@@ -469,7 +540,7 @@
 			native-mode = <&timing0>;
 			timing0: timing@0 {
 				/* 2560x1600 DP panel */
-				clock-frequency = <50000>;
+				clock-frequency = <266000000>;
 				hactive = <2560>;
 				vactive = <1600>;
 				hfront-porch = <48>;
@@ -479,6 +550,80 @@
 				vfront-porch = <8>;
 				vsync-len = <6>;
 			};
+		timing1: timing@1 {
+				/* 800x1280 */
+				clock-frequency = <266000000>;
+				hactive = <800>;
+				vactive = <1280>;
+				hfront-porch = <11>;
+				hback-porch = <3>;
+				hsync-len = <2>;
+				vback-porch = <11>;
+				vfront-porch = <3>;
+				vsync-len = <2>;
+			};
+		};
+	};
+
+	lcd_mipi_dsi_s6e8ax0: lcd_panel_s6e8ax0 {
+		lcd-htiming = <11 3 2 800>;
+		lcd-vtiming = <11 3 2 1280>;
+	};
+
+	mipi_lcd_s6e8ax0: mipi-lcd@s6e8ax0 {
+		compatible = "s6e8ax0";
+		lcd-name = "s6e8ax0";
+		lcd_enabled = <1>;
+		reset-delay = <50>;
+		power-on-delay = <120>;
+		power-off-delay = <200>;
+		gpio-reset = <&gpx1 5 0 0 0>;
+		gpio-power = <&gpx3 0 0 0 0>;
+		gpio-bl = <&gpb2 0 0 0 0>;
+	};
+
+	mipi_dsim_phy: mipi-phy@exynos5250 {
+		compatible = "samsung-exynos,mipi-phy-type1";
+		reg_enable_dphy = <0x10040714>;
+		mask_enable_dphy = <0x00000001>;
+		reg_reset_dsim = <0x10040714>;
+		mask_reset_dsim = <0x00000004>;
+	};
+
+	mipi-dsim {
+		status = "okay";
+		mipi-lcd = <&mipi_lcd_s6e8ax0>;
+		mipi-phy = <&mipi_dsim_phy>;
+		enabled = <0>;
+		panel-info = <&lcd_mipi_dsi_s6e8ax0>;
+		vdd11-supply = <&vdd11>;
+		vdd18-supply = <&vdd18>;
+		vdd3-supply = <&vdd18>;
+		vci-supply = <&vdd18>;
+
+		mipi-config {
+			e_interface = <1>;
+			e_pixel_format = <7>;
+			auto_flush = <0>;
+			eot_disable = <0>;
+			auto_vertical_cnt = <0>;
+			hse = <0>;
+			hfp = <0>;
+			hbp = <0>;
+			hsa = <0>;
+			e_no_data_lane = <3>;
+			e_byte_clk = <0>;
+			e_burst_mode = <1>;
+			p = <3>;
+			m = <115>;
+			s = <1>;
+			pll_stable_time = <500>;
+			esc_clk = <7000000>;
+			stop_holding_cnt =<0x0fff>;
+			bta_timeout = <0xff>;
+			rx_timeout = <0xffff>;
+			e_virtual_ch = <0>;
+			cmd_allow = <0x1>;
 		};
 	};
 
