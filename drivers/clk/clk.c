@@ -272,7 +272,8 @@ static int clk_debug_create_one(struct clk *clk, struct dentry *pdentry)
 	goto out;
 
 err_out:
-	debugfs_remove(clk->dentry);
+	debugfs_remove_recursive(clk->dentry);
+	clk->dentry = NULL;
 out:
 	return ret;
 }
@@ -1628,7 +1629,7 @@ int __clk_init(struct device *dev, struct clk *clk)
 	 * this clock
 	 */
 	hlist_for_each_entry_safe(orphan, tmp2, &clk_orphan_list, child_node) {
-		if (orphan->ops->get_parent) {
+		if (orphan->num_parents && orphan->ops->get_parent) {
 			i = orphan->ops->get_parent(orphan->hw);
 			if (!strcmp(clk->name, orphan->parent_names[i]))
 				__clk_reparent(orphan, clk);
@@ -2115,13 +2116,13 @@ EXPORT_SYMBOL_GPL(of_clk_get_parent_name);
  */
 void __init of_clk_init(const struct of_device_id *matches)
 {
+	const struct of_device_id *match;
 	struct device_node *np;
 
 	if (!matches)
 		matches = __clk_of_table;
 
-	for_each_matching_node(np, matches) {
-		const struct of_device_id *match = of_match_node(matches, np);
+	for_each_matching_node_and_match(np, matches, &match) {
 		of_clk_init_cb_t clk_init_cb = match->data;
 		clk_init_cb(np);
 	}
