@@ -221,7 +221,7 @@ out_put_node:
 	return;
 }
 
-int __init psci_probe(void)
+int psci_probe(void)
 {
 	struct device_node *np;
 	int ret = -ENODEV;
