@@ -139,6 +139,7 @@
 		compatible = "brcm,kona-sdhci";
 		reg = <0x3f1b0000 0x10000>;
 		interrupts = <0x0 73 0x4>;
+		cd-gpios = <&gpio 14 0>;
 		status = "disabled";
 	};
 
