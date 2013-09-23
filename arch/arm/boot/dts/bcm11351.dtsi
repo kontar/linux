@@ -112,4 +112,10 @@
 		status = "disabled";
 	};
 
+	thermal@34008000 {
+		compatible = "brcm,bcm11351-thermal", "brcm,kona-thermal";
+		reg = <0x34008000 0x0024>;
+		thermal-name = "bcm_kona_therm";
+		status = "disabled";
+	};
 };
