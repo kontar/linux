@@ -1546,6 +1546,8 @@ extern int tcp_gro_complete(struct sk_buff *skb);
 extern void __tcp_v4_send_check(struct sk_buff *skb, __be32 saddr,
 				__be32 daddr);
 
+extern int tcp_nuke_addr(struct net *net, struct sockaddr *addr);
+
 static inline u32 tcp_notsent_lowat(const struct tcp_sock *tp)
 {
 	return tp->notsent_lowat ?: sysctl_tcp_notsent_lowat;
