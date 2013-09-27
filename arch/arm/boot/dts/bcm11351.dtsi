@@ -117,6 +117,7 @@
 	sdio1: sdio@3f180000 {
 		compatible = "brcm,kona-sdhci";
 		reg = <0x3f180000 0x10000>;
+		clocks = <&sdio1_clk>;
 		interrupts = <0x0 77 0x4>;
 		status = "disabled";
 	};
@@ -124,6 +125,7 @@
 	sdio2: sdio@3f190000 {
 		compatible = "brcm,kona-sdhci";
 		reg = <0x3f190000 0x10000>;
+		clocks = <&sdio2_clk>;
 		interrupts = <0x0 76 0x4>;
 		status = "disabled";
 	};
@@ -131,6 +133,7 @@
 	sdio3: sdio@3f1a0000 {
 		compatible = "brcm,kona-sdhci";
 		reg = <0x3f1a0000 0x10000>;
+		clocks = <&sdio3_clk>;
 		interrupts = <0x0 74 0x4>;
 		status = "disabled";
 	};
@@ -138,6 +141,7 @@
 	sdio4: sdio@3f1b0000 {
 		compatible = "brcm,kona-sdhci";
 		reg = <0x3f1b0000 0x10000>;
+		clocks = <&sdio4_clk>;
 		interrupts = <0x0 73 0x4>;
 		cd-gpios = <&gpio 14 0>;
 		status = "disabled";
