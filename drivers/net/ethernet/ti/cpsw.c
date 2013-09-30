@@ -355,12 +355,12 @@ struct cpsw_slave {
 
 static inline u32 slave_read(struct cpsw_slave *slave, u32 offset)
 {
-	return __raw_readl(slave->regs + offset);
+	return readl_relaxed(slave->regs + offset);
 }
 
 static inline void slave_write(struct cpsw_slave *slave, u32 val, u32 offset)
 {
-	__raw_writel(val, slave->regs + offset);
+	writel_relaxed(val, slave->regs + offset);
 }
 
 struct cpsw_priv {
@@ -568,8 +568,8 @@ static void cpsw_ndo_set_rx_mode(struct net_device *ndev)
 
 static void cpsw_intr_enable(struct cpsw_priv *priv)
 {
-	__raw_writel(0xFF, &priv->wr_regs->tx_en);
-	__raw_writel(0xFF, &priv->wr_regs->rx_en);
+	writel_relaxed(0xFF, &priv->wr_regs->tx_en);
+	writel_relaxed(0xFF, &priv->wr_regs->rx_en);
 
 	cpdma_ctlr_int_ctrl(priv->dma, true);
 	return;
@@ -577,8 +577,8 @@ static void cpsw_intr_enable(struct cpsw_priv *priv)
 
 static void cpsw_intr_disable(struct cpsw_priv *priv)
 {
-	__raw_writel(0, &priv->wr_regs->tx_en);
-	__raw_writel(0, &priv->wr_regs->rx_en);
+	writel_relaxed(0, &priv->wr_regs->tx_en);
+	writel_relaxed(0, &priv->wr_regs->rx_en);
 
 	cpdma_ctlr_int_ctrl(priv->dma, false);
 	return;
@@ -641,9 +641,9 @@ static irqreturn_t cpsw_interrupt(int irq, void *dev_id)
 	struct cpsw_priv *priv = dev_id;
 	u32 rx, tx, rx_thresh;
 
-	rx_thresh = __raw_readl(&priv->wr_regs->rx_thresh_stat);
-	rx = __raw_readl(&priv->wr_regs->rx_stat);
-	tx = __raw_readl(&priv->wr_regs->tx_stat);
+	rx_thresh = readl_relaxed(&priv->wr_regs->rx_thresh_stat);
+	rx = readl_relaxed(&priv->wr_regs->rx_stat);
+	tx = readl_relaxed(&priv->wr_regs->tx_stat);
 	if (!rx_thresh && !rx && !tx)
 		return IRQ_NONE;
 
@@ -703,12 +703,12 @@ static inline void soft_reset(const char *module, void __iomem *reg)
 {
 	unsigned long timeout = jiffies + HZ;
 
-	__raw_writel(1, reg);
+	writel_relaxed(1, reg);
 	do {
 		cpu_relax();
-	} while ((__raw_readl(reg) & 1) && time_after(timeout, jiffies));
+	} while ((readl_relaxed(reg) & 1) && time_after(timeout, jiffies));
 
-	WARN(__raw_readl(reg) & 1, "failed to soft-reset %s\n", module);
+	WARN(readl_relaxed(reg) & 1, "failed to soft-reset %s\n", module);
 }
 
 #define mac_hi(mac)	(((mac)[0] << 0) | ((mac)[1] << 8) |	\
@@ -760,7 +760,7 @@ static void _cpsw_adjust_link(struct cpsw_slave *slave,
 
 	if (mac_control != slave->mac_control) {
 		phy_print_status(phy);
-		__raw_writel(mac_control, &slave->sliver->mac_control);
+		writel_relaxed(mac_control, &slave->sliver->mac_control);
 	}
 
 	slave->mac_control = mac_control;
@@ -986,7 +986,7 @@ static void cpsw_slave_open(struct cpsw_slave *slave, struct cpsw_priv *priv)
 	soft_reset(name, &slave->sliver->soft_reset);
 
 	/* setup priority mapping */
-	__raw_writel(RX_PRIORITY_MAPPING, &slave->sliver->rx_pri_map);
+	writel_relaxed(RX_PRIORITY_MAPPING, &slave->sliver->rx_pri_map);
 
 	switch (priv->version) {
 	case CPSW_VERSION_1:
@@ -1000,7 +1000,7 @@ static void cpsw_slave_open(struct cpsw_slave *slave, struct cpsw_priv *priv)
 	}
 
 	/* setup max packet size, and mac address */
-	__raw_writel(priv->rx_packet_max, &slave->sliver->rx_maxlen);
+	writel_relaxed(priv->rx_packet_max, &slave->sliver->rx_maxlen);
 	cpsw_set_slave_mac(slave, priv);
 
 	slave->mac_control = 0;	/* no link yet */
@@ -1066,9 +1066,9 @@ static void cpsw_init_host_port(struct cpsw_priv *priv)
 	writel(fifo_mode, &priv->host_port_regs->tx_in_ctl);
 
 	/* setup host port priority mapping */
-	__raw_writel(CPDMA_TX_PRIORITY_MAP,
+	writel_relaxed(CPDMA_TX_PRIORITY_MAP,
 		     &priv->host_port_regs->cpdma_tx_pri_map);
-	__raw_writel(0, &priv->host_port_regs->cpdma_rx_chan_map);
+	writel_relaxed(0, &priv->host_port_regs->cpdma_rx_chan_map);
 
 	cpsw_ale_control_set(priv->ale, priv->host_port,
 			     ALE_PORT_STATE, ALE_PORT_STATE_FORWARD);
@@ -1124,10 +1124,10 @@ static int cpsw_ndo_open(struct net_device *ndev)
 		cpdma_control_set(priv->dma, CPDMA_RX_BUFFER_OFFSET, 0);
 
 		/* disable priority elevation */
-		__raw_writel(0, &priv->regs->ptype);
+		writel_relaxed(0, &priv->regs->ptype);
 
 		/* enable statistics collection only on all ports */
-		__raw_writel(0x7, &priv->regs->stat_port_en);
+		writel_relaxed(0x7, &priv->regs->stat_port_en);
 
 		if (WARN_ON(!priv->data.rx_descs))
 			priv->data.rx_descs = 128;
@@ -1319,7 +1319,7 @@ static void cpsw_hwtstamp_v2(struct cpsw_priv *priv)
 
 	slave_write(slave, mtype, CPSW2_TS_SEQ_MTYPE);
 	slave_write(slave, ctrl, CPSW2_CONTROL);
-	__raw_writel(ETH_P_1588, &priv->regs->ts_ltype);
+	writel_relaxed(ETH_P_1588, &priv->regs->ts_ltype);
 }
 
 static int cpsw_hwtstamp_ioctl(struct net_device *dev, struct ifreq *ifr)
@@ -2004,7 +2004,7 @@ static int cpsw_probe(struct platform_device *pdev)
 		goto clean_cpsw_iores_ret;
 	}
 	priv->regs = ss_regs;
-	priv->version = __raw_readl(&priv->regs->id_ver);
+	priv->version = readl_relaxed(&priv->regs->id_ver);
 	priv->host_port = HOST_PORT_NUM;
 
 	priv->cpsw_wr_res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
