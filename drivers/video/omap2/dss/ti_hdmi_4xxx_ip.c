@@ -43,13 +43,13 @@
 static inline void hdmi_write_reg(void __iomem *base_addr,
 				const u16 idx, u32 val)
 {
-	__raw_writel(val, base_addr + idx);
+	writel_relaxed(val, base_addr + idx);
 }
 
 static inline u32 hdmi_read_reg(void __iomem *base_addr,
 				const u16 idx)
 {
-	return __raw_readl(base_addr + idx);
+	return readl_relaxed(base_addr + idx);
 }
 
 static inline void __iomem *hdmi_wp_base(struct hdmi_ip_data *ip_data)
