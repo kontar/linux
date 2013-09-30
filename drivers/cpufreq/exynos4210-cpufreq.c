@@ -62,20 +62,20 @@ static void exynos4210_set_clkdiv(unsigned int div_index)
 
 	tmp = apll_freq_4210[div_index].clk_div_cpu0;
 
-	__raw_writel(tmp, EXYNOS4_CLKDIV_CPU);
+	writel_relaxed(tmp, EXYNOS4_CLKDIV_CPU);
 
 	do {
-		tmp = __raw_readl(EXYNOS4_CLKDIV_STATCPU);
+		tmp = readl_relaxed(EXYNOS4_CLKDIV_STATCPU);
 	} while (tmp & 0x1111111);
 
 	/* Change Divider - CPU1 */
 
 	tmp = apll_freq_4210[div_index].clk_div_cpu1;
 
-	__raw_writel(tmp, EXYNOS4_CLKDIV_CPU1);
+	writel_relaxed(tmp, EXYNOS4_CLKDIV_CPU1);
 
 	do {
-		tmp = __raw_readl(EXYNOS4_CLKDIV_STATCPU1);
+		tmp = readl_relaxed(EXYNOS4_CLKDIV_STATCPU1);
 	} while (tmp & 0x11);
 }
 
@@ -87,30 +87,30 @@ static void exynos4210_set_apll(unsigned int index)
 	clk_set_parent(moutcore, mout_mpll);
 
 	do {
-		tmp = (__raw_readl(EXYNOS4_CLKMUX_STATCPU)
+		tmp = (readl_relaxed(EXYNOS4_CLKMUX_STATCPU)
 			>> EXYNOS4_CLKSRC_CPU_MUXCORE_SHIFT);
 		tmp &= 0x7;
 	} while (tmp != 0x2);
 
 	/* 2. Set APLL Lock time */
-	__raw_writel(EXYNOS4_APLL_LOCKTIME, EXYNOS4_APLL_LOCK);
+	writel_relaxed(EXYNOS4_APLL_LOCKTIME, EXYNOS4_APLL_LOCK);
 
 	/* 3. Change PLL PMS values */
-	tmp = __raw_readl(EXYNOS4_APLL_CON0);
+	tmp = readl_relaxed(EXYNOS4_APLL_CON0);
 	tmp &= ~((0x3ff << 16) | (0x3f << 8) | (0x7 << 0));
 	tmp |= apll_freq_4210[index].mps;
-	__raw_writel(tmp, EXYNOS4_APLL_CON0);
+	writel_relaxed(tmp, EXYNOS4_APLL_CON0);
 
 	/* 4. wait_lock_time */
 	do {
-		tmp = __raw_readl(EXYNOS4_APLL_CON0);
+		tmp = readl_relaxed(EXYNOS4_APLL_CON0);
 	} while (!(tmp & (0x1 << EXYNOS4_APLLCON0_LOCKED_SHIFT)));
 
 	/* 5. MUX_CORE_SEL = APLL */
 	clk_set_parent(moutcore, mout_apll);
 
 	do {
-		tmp = __raw_readl(EXYNOS4_CLKMUX_STATCPU);
+		tmp = readl_relaxed(EXYNOS4_CLKMUX_STATCPU);
 		tmp &= EXYNOS4_CLKMUX_STATCPU_MUXCORE_MASK;
 	} while (tmp != (0x1 << EXYNOS4_CLKSRC_CPU_MUXCORE_SHIFT));
 }
@@ -134,10 +134,10 @@ static void exynos4210_set_frequency(unsigned int old_index,
 			exynos4210_set_clkdiv(new_index);
 
 			/* 2. Change just s value in apll m,p,s value */
-			tmp = __raw_readl(EXYNOS4_APLL_CON0);
+			tmp = readl_relaxed(EXYNOS4_APLL_CON0);
 			tmp &= ~(0x7 << 0);
 			tmp |= apll_freq_4210[new_index].mps & 0x7;
-			__raw_writel(tmp, EXYNOS4_APLL_CON0);
+			writel_relaxed(tmp, EXYNOS4_APLL_CON0);
 		} else {
 			/* Clock Configuration Procedure */
 			/* 1. Change the system clock divider values */
@@ -148,10 +148,10 @@ static void exynos4210_set_frequency(unsigned int old_index,
 	} else if (old_index < new_index) {
 		if (!exynos4210_pms_change(old_index, new_index)) {
 			/* 1. Change just s value in apll m,p,s value */
-			tmp = __raw_readl(EXYNOS4_APLL_CON0);
+			tmp = readl_relaxed(EXYNOS4_APLL_CON0);
 			tmp &= ~(0x7 << 0);
 			tmp |= apll_freq_4210[new_index].mps & 0x7;
-			__raw_writel(tmp, EXYNOS4_APLL_CON0);
+			writel_relaxed(tmp, EXYNOS4_APLL_CON0);
 
 			/* 2. Change the system clock divider values */
 			exynos4210_set_clkdiv(new_index);
