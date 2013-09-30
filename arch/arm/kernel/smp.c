@@ -149,7 +149,7 @@ int boot_secondary(unsigned int cpu, struct task_struct *idle)
 int platform_can_cpu_hotplug(void)
 {
 #ifdef CONFIG_HOTPLUG_CPU
-	if (smp_ops.cpu_kill)
+	if (smp_ops.cpu_die)
 		return 1;
 #endif
 
