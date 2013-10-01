@@ -100,6 +100,11 @@ config AM335X_PHY_USB
 	  This driver provides PHY support for that phy which part for the
 	  AM335x SoC.
 
+config BCM_KONA_CTRL_USB
+	tristate
+	help
+	  Enable this to support the Broadcom Kona USB control block
+
 config SAMSUNG_USBPHY
 	tristate
 	help
