@@ -28,7 +28,6 @@
 
 static int highbank_suspend_finish(unsigned long val)
 {
-	outer_flush_all();
 	outer_disable();
 
 	highbank_set_pwr_suspend();
