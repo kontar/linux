@@ -1,0 +1,18 @@
+* Broadcom Kona Thermal Management Unit
+
+This version is for the BCM281xx family of SoCs.
+
+Required properties:
+- compatible : "brcm,bcm11351-thermal", "brcm,kona-thermal"
+- reg : Address range of the thermal register
+- thermal-name: this entry must be specified and it will be passed into
+thermal_zone_device_register().  This name will also be reported under Hwmon
+sysfs 'name' attribute.
+
+Example:
+	thermal@34008000 {
+		compatible = "brcm,bcm11351-thermal", "brcm,kona-thermal";
+		reg = <0x34008000 0x0024>;
+		thermal-name = "bcm_kona_therm";
+		status = "disabled";
+	};
