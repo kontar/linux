@@ -43,5 +43,7 @@
 		status = "okay";
 	};
 
-
+	thermal@34008000 {
+		status = "okay";
+	};
 };
