@@ -60,21 +60,50 @@ struct secondary_data {
 	void *stack;
 };
 extern struct secondary_data secondary_data;
-extern void secondary_holding_pen(void);
-extern volatile unsigned long secondary_holding_pen_release;
+extern void secondary_entry(void);
 
 extern void arch_send_call_function_single_ipi(int cpu);
 extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
 
 struct device_node;
 
-struct smp_enable_ops {
+extern int __cpu_disable(void);
+
+extern void __cpu_die(unsigned int cpu);
+extern void cpu_die(void);
+
+/**
+ * struct smp_operations - Callback operations for hotplugging CPUs.
+ *
+ * @name:	Name of the property as appears in a devicetree cpu node's
+ *		enable-method property.
+ * @cpu_init:	Reads any data necessary for a specific enable-method form the
+ *		devicetree, for a given cpu node and proposed logical id.
+ * @cpu_prepare: Early one-time preparation step for a cpu. If there is a
+ *		mechanism for doing so, tests whether it is possible to boot
+ *		the given CPU.
+ * @cpu_boot:	Boots a cpu into the kernel.
+ * @cpu_postboot: Optionally, perform any post-boot cleanup or necesary
+ *		synchronisation. Called from the cpu being booted.
+ * @cpu_disable: Prepares a cpu to die. May fail for some mechanism-specific
+ * 		reason, which will cause the hot unplug to be aborted. Called
+ * 		from the cpu to be killed.
+ * @cpu_die:	Makes the a leave the kernel. Must not fail. Called from the
+ *		cpu being killed.
+ */
+struct smp_operations {
 	const char	*name;
-	int		(*init_cpu)(struct device_node *, int);
-	int		(*prepare_cpu)(int);
+	int		(*cpu_init)(struct device_node *, unsigned int);
+	int		(*cpu_prepare)(unsigned int);
+	int		(*cpu_boot)(unsigned int);
+	void		(*cpu_postboot)(void);
+#ifdef CONFIG_HOTPLUG_CPU
+	int  (*cpu_disable)(unsigned int cpu);
+	void (*cpu_die)(unsigned int cpu);
+#endif
 };
 
-extern const struct smp_enable_ops smp_spin_table_ops;
-extern const struct smp_enable_ops smp_psci_ops;
+extern const struct smp_operations smp_spin_table_ops;
+extern const struct smp_operations smp_psci_ops;
 
 #endif /* ifndef __ASM_SMP_H */
