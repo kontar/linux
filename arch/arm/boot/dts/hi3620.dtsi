@@ -1493,6 +1493,10 @@
 			#size-cells = <0>;
 			clocks = <&mmcclk1>, <&ddrcperclk>;
 			clock-names = "ciu", "biu";
+			clken-reg = <0x1f8 12>;
+			drv-sel-reg = <0x1f8 16>;
+			sam-sel-reg = <0x1f8 20>;
+			div-reg = <0x1f8 13>;
 		};
 
 		/* sd as mmcblk1 */
@@ -1504,6 +1508,10 @@
 			#size-cells = <0>;
 			clocks = <&sdclk>, <&ddrcperclk>;
 			clock-names = "ciu", "biu";
+			clken-reg = <0x1f8 0>;
+			drv-sel-reg = <0x1f8 4>;
+			sam-sel-reg = <0x1f8 8>;
+			div-reg = <0x1f8 1>;
 		};
 
 		dwmmc_2: dwmmc2@fcd05000 {
@@ -1513,6 +1521,10 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			clocks = <&mmcclk2>;
+			clken-reg = <0x1f8 24>;
+			drv-sel-reg = <0x1f8 28>;
+			sam-sel-reg = <0x1fc 0>;
+			div-reg = <0x1f8 25>;
 		};
 
 		dwmmc_3: dwmmc3@fcd06000 {
@@ -1522,6 +1534,10 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			clocks = <&mmcclk3>;
+			clken-reg = <0x1fc 4>;
+			drv-sel-reg = <0x1fc 8>;
+			sam-sel-reg = <0x1fc 12>;
+			div-reg = <0x1f8 5>;
 		};
 
 		dma0: dma@fcd02000 {
