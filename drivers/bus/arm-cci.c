@@ -281,6 +281,9 @@ asmlinkage void __naked cci_enable_port_for_self(void)
 	/* Enable the CCI port */
 "	ldr	r0, [r0, %[offsetof_port_phys]] \n"
 "	mov	r3, #"__stringify(CCI_ENABLE_REQ)" \n"
+#ifdef __ARMEB__
+"	rev	r3, r3 \n"
+#endif /* __ARMEB__ */
 "	str	r3, [r0, #"__stringify(CCI_PORT_CTRL)"] \n"
 
 	/* poll the status reg for completion */
@@ -288,6 +291,9 @@ asmlinkage void __naked cci_enable_port_for_self(void)
 "	ldr	r0, [r1] \n"
 "	ldr	r0, [r0, r1]		@ cci_ctrl_base \n"
 "4:	ldr	r1, [r0, #"__stringify(CCI_CTRL_STATUS)"] \n"
+#ifdef __ARMEB__
+"	rev	r1, r1 \n"
+#endif /* __ARMEB__ */
 "	tst	r1, #1 \n"
 "	bne	4b \n"
 
