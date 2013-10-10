@@ -6,6 +6,13 @@
 
 	.globl relocate_new_kernel
 relocate_new_kernel:
+#ifdef CONFIG_CPU_V7
+	.arm
+ THUMB(	adr	r9, BSYM(1f)	)	@ On ARMv7 kexec always jumps
+ THUMB(	bx	r9		)	@ here in ARM. If this is
+ THUMB(	.thumb			)	@ a Thumb-2 kernel, switch
+ THUMB(1:			)       @ back to Thumb now.
+#endif
 
 	ldr	r0,kexec_indirection_page
 	ldr	r1,kexec_start_address
