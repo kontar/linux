@@ -19,6 +19,13 @@
  * ready for them to initialise.
  */
 ENTRY(exynos4_secondary_startup)
+#ifdef CONFIG_CPU_BE8_BOOT_LE
+        /*
+        * ROM code operates in little endian mode, when we get control we
+        * need to switch it to big endian mode.
+        */
+        setend be
+#endif /* CONFIG_CPU_BE8_BOOT_LE */
 	mrc	p15, 0, r0, c0, c0, 5
 	and	r0, r0, #15
 	adr	r4, 1f
