@@ -459,6 +459,14 @@ void __kprobes arch_prepare_kretprobe(struct kretprobe_instance *ri,
 	regs->ARM_lr = (unsigned long)&kretprobe_trampoline;
 }
 
+#ifdef CONFIG_THUMB2_KERNEL
+unsigned long arch_deref_entry_point(void *entry)
+{
+	/* Remove any thumb flag from the function pointer. */
+	return (unsigned long)entry & ~1lu;
+}
+#endif
+
 int __kprobes setjmp_pre_handler(struct kprobe *p, struct pt_regs *regs)
 {
 	struct jprobe *jp = container_of(p, struct jprobe, kp);
