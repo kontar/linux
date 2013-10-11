@@ -70,11 +70,18 @@ struct smsc95xx_priv {
 	spinlock_t mac_cr_lock;
 	u8 features;
 	u8 suspend_flags;
+	bool mac_set_from_param;
+	bool mac_is_random;
 };
 
 static bool turbo_mode = true;
 module_param(turbo_mode, bool, 0644);
 MODULE_PARM_DESC(turbo_mode, "Enable multiple frames per Rx transaction");
+
+static char *macaddr = ":";
+static bool set_macaddr = false;
+module_param(macaddr, charp, 0);
+MODULE_PARM_DESC(macaddr, " macaddr=macaddr;[tgt-netdevname] (Set MAC only if there is a device without MAC on EEPROM)");
 
 static int __must_check __smsc95xx_read_reg(struct usbnet *dev, u32 index,
 					    u32 *data, int in_pm)
@@ -765,8 +772,71 @@ static int smsc95xx_ioctl(struct net_device *netdev, struct ifreq *rq, int cmd)
 	return generic_mii_ioctl(&dev->mii, if_mii(rq), cmd, NULL);
 }
 
+/* set mac address from the macaddr module parameter */
+static int smsc95xx_init_mac_address_from_param(struct usbnet *dev)
+{
+	struct smsc95xx_priv *pdata = (struct smsc95xx_priv *)(dev->data[0]);
+	int i, parsed, ret;
+	u8 mtbl[ETH_ALEN];
+	char *input = NULL;
+	char *config_param = NULL;
+	char *netdev_name = NULL;	
+
+	parsed = 0;
+	ret = 0;
+
+	input = kstrdup(macaddr, GFP_KERNEL);
+
+	if (!input)
+		return -ENOMEM;
+
+	if (strlen(input) >= 17) {
+		while ((config_param = strsep(&input, ";"))) {
+			if (parsed == 0) {
+				if (!mac_pton(config_param, mtbl)) {
+					ret = 1;
+					goto parse_err;
+				}
+			} else {
+				netdev_name = config_param;				
+			}
+			parsed ++;
+		}
+
+		if (parsed && is_valid_ether_addr(mtbl)) {
+			if (netdev_name && strlen(netdev_name)) {
+				if (strcmp(netdev_name, dev->net->name) != 0) {
+					netif_dbg(dev, ifup, dev->net, "requested devname (%s) didn't match (%s)\n", netdev_name, dev->net->name);
+					ret = 1;
+					goto out;
+				}
+			}
+
+			for (i = 0; i < ETH_ALEN; i++) {
+				dev->net->dev_addr[i] = mtbl[i];
+			}
+
+			netif_dbg(dev, ifup, dev->net, "set valid MAC address from smsc95xx.macaddr\n");
+			set_macaddr = true;
+			pdata->mac_set_from_param = true;
+			pdata->mac_is_random = false;
+			goto out;
+		}
+	} 
+
+parse_err:
+	netif_dbg(dev, ifup, dev->net, "failed to parse (valid) MAC from smsc95xx.macaddr\n");
+	set_macaddr = true;
+out:
+	if (input)
+		kfree(input);
+	return ret;
+}
+
 static void smsc95xx_init_mac_address(struct usbnet *dev)
 {
+	struct smsc95xx_priv *pdata = (struct smsc95xx_priv *)(dev->data[0]);	
+
 	/* try reading mac address from EEPROM */
 	if (smsc95xx_read_eeprom(dev, EEPROM_MAC_OFFSET, ETH_ALEN,
 			dev->net->dev_addr) == 0) {
@@ -779,15 +849,24 @@ static void smsc95xx_init_mac_address(struct usbnet *dev)
 
 	/* no eeprom, or eeprom values are invalid. generate random MAC */
 	eth_hw_addr_random(dev->net);
+	pdata->mac_is_random = true;
 	netif_dbg(dev, ifup, dev->net, "MAC address set to eth_random_addr\n");
 }
 
 static int smsc95xx_set_mac_address(struct usbnet *dev)
 {
-	u32 addr_lo = dev->net->dev_addr[0] | dev->net->dev_addr[1] << 8 |
-		dev->net->dev_addr[2] << 16 | dev->net->dev_addr[3] << 24;
-	u32 addr_hi = dev->net->dev_addr[4] | dev->net->dev_addr[5] << 8;
+	u32 addr_lo, addr_hi;
 	int ret;
+	struct smsc95xx_priv *pdata = (struct smsc95xx_priv *)(dev->data[0]);
+
+	if (pdata->mac_is_random && !pdata->mac_set_from_param && !set_macaddr) {
+		netif_dbg(dev, ifup, dev->net, "random MAC address, not yet set from smsc95xx.macaddr, try to set it ...\n");
+		smsc95xx_init_mac_address_from_param(dev);
+	}
+
+	addr_lo = dev->net->dev_addr[0] | dev->net->dev_addr[1] << 8 |
+		dev->net->dev_addr[2] << 16 | dev->net->dev_addr[3] << 24;
+	addr_hi = dev->net->dev_addr[4] | dev->net->dev_addr[5] << 8;
 
 	ret = smsc95xx_write_reg(dev, ADDRL, addr_lo);
 	if (ret < 0)
