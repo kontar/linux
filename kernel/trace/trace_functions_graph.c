@@ -1439,20 +1439,6 @@ static int func_graph_set_flag(u32 old_flags, u32 bit, int set)
 	return 0;
 }
 
-static struct trace_event_functions graph_functions = {
-	.trace		= print_graph_function_event,
-};
-
-static struct trace_event graph_trace_entry_event = {
-	.type		= TRACE_GRAPH_ENT,
-	.funcs		= &graph_functions,
-};
-
-static struct trace_event graph_trace_ret_event = {
-	.type		= TRACE_GRAPH_RET,
-	.funcs		= &graph_functions
-};
-
 static struct tracer graph_trace __tracer_data = {
 	.name		= "function_graph",
 	.open		= graph_trace_open,
