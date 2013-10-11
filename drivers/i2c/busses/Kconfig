@@ -963,4 +963,14 @@ config SCx200_ACB
 	  This support is also available as a module.  If so, the module
 	  will be called scx200_acb.
 
+config I2C_BCM_KONA
+	tristate "BCM Kona I2C adapter"
+	depends on ARCH_BCM_MOBILE
+	default y
+	help
+	  If you say yes to this option, support will be included for the
+	  I2C interface on the Broadcom Kona family of processors.
+
+	  If you do not need KONA I2C inteface, say N.
+
 endmenu
