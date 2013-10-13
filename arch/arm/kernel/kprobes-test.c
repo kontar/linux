@@ -323,15 +323,20 @@ static int test_kprobe(long (*func)(long, long))
 	int ret;
 
 	the_kprobe.addr = (kprobe_opcode_t *)func;
+	//pr_info("%s: >>>>>> 0x%08x\n", __func__, (u32)the_kprobe.addr);
 	ret = register_kprobe(&the_kprobe);
 	if (ret < 0) {
 		pr_err("FAIL: register_kprobe failed with %d\n", ret);
 		return ret;
 	}
 
+	//pr_info("%s: probe registered \n", __func__);
+
 	ret = call_test_func(func, true);
 
+	//pr_info("%s: called_test_func. ret = %d\n", __func__, ret);
 	unregister_kprobe(&the_kprobe);
+	//pr_info("%s: probe unregistered \n", __func__);
 	the_kprobe.flags = 0; /* Clear disable flag to allow reuse */
 
 	if (!ret)
@@ -1591,11 +1596,16 @@ static int run_test_cases(void (*tests)(void), const union decode_item *table)
 	return 0;
 }
 
+volatile static bool wait_here = true;
+
 static int __init run_all_tests(void)
 {
 	int ret = 0;
 
 	pr_info("Beginning kprobe tests...\n");
+
+	while (wait_here)
+		cpu_relax();
 
 #ifndef CONFIG_THUMB2_KERNEL
 
