@@ -66,7 +66,7 @@ int __kprobes arch_prepare_kprobe(struct kprobe *p)
 	insn = __mem_to_opcode_thumb16(((u16 *)addr)[0]);
 	if (is_wide_instruction(insn)) {
 		u16 inst2 = __mem_to_opcode_thumb16(((u16 *)addr)[1]);
-		insn = ___asm_opcode_thumb32_compose(insn, inst2);
+		insn = __opcode_thumb32_compose(insn, inst2);
 		decode_insn = thumb32_kprobe_decode_insn;
 	} else
 		decode_insn = thumb16_kprobe_decode_insn;
@@ -78,11 +78,14 @@ int __kprobes arch_prepare_kprobe(struct kprobe *p)
 	decode_insn = arm_kprobe_decode_insn;
 #endif
 
+	//pr_info("%s: 0x%08lx\n", __func__, insn);
 	p->opcode = insn;
 	p->ainsn.insn = tmp_insn;
 
+	pr_wait("%s: 0x%08lx\n", __func__, insn);
 	switch ((*decode_insn)(insn, &p->ainsn)) {
 	case INSN_REJECTED:	/* not supported */
+		//pr_info("%s: INSN_REJECTED\n", __func__);
 		return -EINVAL;
 
 	case INSN_GOOD:		/* instruction uses slot */
@@ -95,10 +98,12 @@ int __kprobes arch_prepare_kprobe(struct kprobe *p)
 				sizeof(p->ainsn.insn[0]) * MAX_INSN_SIZE);
 		p->ainsn.insn_fn = (kprobe_insn_fn_t *)
 					((uintptr_t)p->ainsn.insn | thumb);
+		//pr_info("%s: INSN_GOOD\n", __func__);
 		break;
 
 	case INSN_GOOD_NO_SLOT:	/* instruction doesn't need insn slot */
 		p->ainsn.insn = NULL;
+		//pr_info("%s: INSN_GOOD_NO_SLOT\n", __func__);
 		break;
 	}
 
@@ -208,6 +213,7 @@ singlestep(struct kprobe *p, struct pt_regs *regs, struct kprobe_ctlblk *kcb)
  * kprobe, and that level is reserved for user kprobe handlers, so we can't
  * risk encountering a new kprobe in an interrupt handler.
  */
+
 void __kprobes kprobe_handler(struct pt_regs *regs)
 {
 	struct kprobe *p, *cur;
@@ -215,7 +221,7 @@ void __kprobes kprobe_handler(struct pt_regs *regs)
 
 	kcb = get_kprobe_ctlblk();
 	cur = kprobe_running();
-
+	pr_wait("%s: PC: 0x%08lx\n", __func__, regs->ARM_pc);
 #ifdef CONFIG_THUMB2_KERNEL
 	/*
 	 * First look for a probe which was registered using an address with

@@ -44,6 +44,10 @@
 #ifdef CONFIG_KPROBES
 #include <asm/kprobes.h>
 
+extern volatile bool wait_here;
+
+#define pr_wait(fmt, ...) {if (!wait_here) pr_info(fmt, ##__VA_ARGS__);}
+
 /* kprobe_status settings */
 #define KPROBE_HIT_ACTIVE	0x00000001
 #define KPROBE_HIT_SS		0x00000002
