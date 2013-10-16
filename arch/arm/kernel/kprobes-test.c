@@ -932,7 +932,7 @@ static void coverage_end(void)
 {
 	struct coverage_entry *entry = coverage.base;
 	struct coverage_entry *end = coverage.base + coverage.num_entries;
-
+	pr_info("%s: entry: 0x%08lx, end: 0x%08lx\n", __func__, entry, end);
 	for (; entry < end; ++entry) {
 		u32 mask = entry->header->mask.bits;
 		u32 value = entry->header->value.bits;
@@ -962,7 +962,7 @@ void __naked __kprobes_test_case_start(void)
 	__asm__ __volatile__ (
 		"stmdb	sp!, {r4-r11}				\n\t"
 		"sub	sp, sp, #"__stringify(TEST_MEMORY_SIZE)"\n\t"
-		"bic	r0, lr, #3  @ r0 = inline title block	\n\t"
+		"bic	r0, lr, #1  @ r0 = inline title block	\n\t"
 		"mov	r1, sp					\n\t"
 		"bl	kprobes_test_case_start			\n\t"
 		"bx	r0					\n\t"
@@ -1345,8 +1345,10 @@ static uintptr_t __used kprobes_test_case_start(const char **title, void *stack)
 	struct test_arg_end *end_arg;
 	unsigned long test_code;
 
+	pr_wait("%s: >>>>>\n", __func__);
+	pr_wait("%s: title: 0x%08lx, *title: 0x%08lx\n", __func__, title, *title);
 	args = (struct test_arg *)(title + 1);
-
+	pr_wait("%s: args: 0x%08lx, stack: 0x%08lx\n", __func__, args, stack);
 	current_title = *title;
 	current_args = args;
 	current_stack = stack;
@@ -1380,11 +1382,13 @@ static uintptr_t __used kprobes_test_case_start(const char **title, void *stack)
 		current_instruction = __mem_to_opcode_thumb16(p[0]);
 		if (is_wide_instruction(current_instruction)) {
 			u16 instr2 = __mem_to_opcode_thumb16(p[1]);
-			current_instruction = ___asm_opcode_thumb32_compose(current_instruction, instr2);
+			current_instruction = __opcode_thumb32_compose(current_instruction, instr2);
 		}
 	} else {
 		current_instruction = __mem_to_opcode_arm(*(u32 *)test_code);
 	}
+
+
 
 	if (current_title[0] == '.')
 		verbose("%s\n", current_title);
@@ -1591,21 +1595,16 @@ static int run_test_cases(void (*tests)(void), const union decode_item *table)
 		return ret;
 
 	tests();
-
+	pr_info("%s: <<<>>>\n", __func__);
 	coverage_end();
 	return 0;
 }
-
-volatile static bool wait_here = true;
 
 static int __init run_all_tests(void)
 {
 	int ret = 0;
 
 	pr_info("Beginning kprobe tests...\n");
-
-	while (wait_here)
-		cpu_relax();
 
 #ifndef CONFIG_THUMB2_KERNEL
 

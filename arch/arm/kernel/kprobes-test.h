@@ -8,7 +8,7 @@
  * published by the Free Software Foundation.
  */
 
-#define VERBOSE 0 /* Set to '1' for more logging of test cases */
+#define VERBOSE 1 /* Set to '1' for more logging of test cases */
 
 #ifdef CONFIG_THUMB2_KERNEL
 #define NORMAL_ISA "16"
@@ -117,6 +117,7 @@ struct test_arg_end {
 	"9999: .ascii "#title"				\n\t"	\
 	".byte	0					\n\t"	\
 	".popsection					\n\t"	\
+	"@.align						\n\t"	\
 	".word	9999b					\n\t"
 
 #define	TEST_ARG_REG(reg, val)					\

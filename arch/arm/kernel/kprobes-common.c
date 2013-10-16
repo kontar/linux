@@ -336,8 +336,8 @@ prepare_emulated_insn(kprobe_opcode_t insn, struct arch_specific_insn *asi,
 #ifdef CONFIG_THUMB2_KERNEL
 	if (thumb) {
 		u16 *thumb_insn = (u16 *)asi->insn;
-		thumb_insn[1] = 0x4770; /* Thumb bx lr */
-		thumb_insn[2] = 0x4770; /* Thumb bx lr */
+		thumb_insn[1] = __opcode_to_mem_thumb16(0x4770); /* Thumb bx lr */
+		thumb_insn[2] = __opcode_to_mem_thumb16(0x4770); /* Thumb bx lr */
 		return insn;
 	}
 	asi->insn[1] = __opcode_to_mem_arm(0xe12fff1e); /* ARM bx lr */
@@ -362,8 +362,8 @@ set_emulated_insn(kprobe_opcode_t insn, struct arch_specific_insn *asi,
 	if (thumb) {
 		u16 *ip = (u16 *)asi->insn;
 		if (is_wide_instruction(insn))
-			*ip++ = ___asm_opcode_to_mem_thumb16(insn >> 16);
-		*ip++ = ___asm_opcode_to_mem_thumb16(insn);
+			*ip++ = __opcode_to_mem_thumb16(insn >> 16);
+		*ip++ = __opcode_to_mem_thumb16(insn);
 		return;
 	}
 #endif
@@ -524,8 +524,9 @@ kprobe_decode_insn(kprobe_opcode_t insn, struct arch_specific_insn *asi,
 	const struct decode_header *next;
 	bool matched = false;
 
+	//pr_info("%s: 0x%08lx\n", __func__, insn);
 	insn = prepare_emulated_insn(insn, asi, thumb);
-
+	//pr_info("%s: 0x%08lx\n", __func__, insn);
 	for (;; h = next) {
 		enum decode_type type = h->type_regs.bits & DECODE_TYPE_MASK;
 		u32 regs = h->type_regs.bits >> DECODE_TYPE_BITS;
