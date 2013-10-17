@@ -10,7 +10,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-
+#include <linux/kprobes.h>
 #include "kprobes-test.h"
 
 
@@ -55,8 +55,6 @@
 	".thumb				\n\t"			\
 	"2:	nop			\n\t"			\
 	TESTCASE_END
-
-volatile bool wait_here = true;
 
 void kprobe_thumb16_test_cases(void)
 {
@@ -348,6 +346,10 @@ void kprobe_thumb32_test_cases(void)
 	TEST_UNSUPPORTED("rfeia	sp")
 	TEST_UNSUPPORTED("rfedb	sp!")
 	TEST_UNSUPPORTED("rfeia	sp!")
+
+	/*while(wait_here)
+		cpu_relax();*/
+	/*wait_here = false;*/
 
 	TEST_P(   "stmia	r",0, 16*4,", {r0,r8}")
 	TEST_P(   "stmia	r",4, 16*4,", {r0-r12,r14}")

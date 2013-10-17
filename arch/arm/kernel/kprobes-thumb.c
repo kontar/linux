@@ -163,9 +163,9 @@ t32_decode_ldmstm(kprobe_opcode_t insn, struct arch_specific_insn *asi)
 	enum kprobe_insn ret = kprobe_decode_ldmstm(insn, asi);
 
 	/* Fixup modified instruction to have halfwords in correct order...*/
-	insn = asi->insn[0];
-	((u16 *)asi->insn)[0] = insn >> 16;
-	((u16 *)asi->insn)[1] = insn & 0xffff;
+	insn = __mem_to_opcode_arm(asi->insn[0]);
+	((u16 *)asi->insn)[0] = __opcode_to_mem_thumb16(insn >> 16);
+	((u16 *)asi->insn)[1] = __opcode_to_mem_thumb16(insn & 0xffff);
 
 	return ret;
 }

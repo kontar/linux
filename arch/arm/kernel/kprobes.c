@@ -59,7 +59,7 @@ int __kprobes arch_prepare_kprobe(struct kprobe *p)
 
 	if (in_exception_text(addr))
 		return -EINVAL;
-
+	pr_wait("%s: 0x%08lx\n", __func__, addr);
 #ifdef CONFIG_THUMB2_KERNEL
 	thumb = true;
 	addr &= ~1; /* Bit 0 would normally be set to indicate Thumb code */
