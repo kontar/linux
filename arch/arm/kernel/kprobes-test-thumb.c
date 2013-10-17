@@ -136,7 +136,8 @@ void kprobe_thumb16_test_cases(void)
 
 	/*while (wait_here)
 		cpu_relax();*/
-#if 0
+	/*wait_here = false;*/
+#if 1
 	TESTCASE_START("bx	pc")
 		TEST_ARG_REG(14, 99f+1)
 		TEST_ARG_END("")
@@ -264,7 +265,7 @@ DONT_TEST_IN_ITBLOCK(
 	TEST_POPPC("pop	{pc}",15*4)
 	TEST_POPPC("pop	{r0-r7,pc}",7*4)
 	TEST_POPPC("pop	{r1,r3,r5,r7,pc}",11*4)
-#if 0
+#if 1
 	TEST_THUMB_TO_ARM_INTERWORK_P("pop	{pc}	@ ",13,15*4,"")
 	TEST_THUMB_TO_ARM_INTERWORK_P("pop	{r0-r7,pc}	@ ",13,7*4,"")
 #endif
