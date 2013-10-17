@@ -225,6 +225,7 @@ static int kretprobe_handler_called;
 #define FUNC_ARG1 0x12345678
 #define FUNC_ARG2 0xabcdef
 
+volatile bool wait_here = true;
 
 #ifndef CONFIG_THUMB2_KERNEL
 
