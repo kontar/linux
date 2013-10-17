@@ -525,8 +525,9 @@ kprobe_decode_insn(kprobe_opcode_t insn, struct arch_specific_insn *asi,
 	const struct decode_header *next;
 	bool matched = false;
 
+	//pr_info("%s: 0x%08lx\n", __func__, insn);
 	insn = prepare_emulated_insn(insn, asi, thumb);
-
+	//pr_info("%s: 0x%08lx\n", __func__, insn);
 	for (;; h = next) {
 		enum decode_type type = h->type_regs.bits & DECODE_TYPE_MASK;
 		u32 regs = h->type_regs.bits >> DECODE_TYPE_BITS;

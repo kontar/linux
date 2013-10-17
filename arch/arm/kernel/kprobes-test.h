@@ -8,7 +8,7 @@
  * published by the Free Software Foundation.
  */
 
-#define VERBOSE 0 /* Set to '1' for more logging of test cases */
+#define VERBOSE 1 /* Set to '1' for more logging of test cases */
 
 #ifdef CONFIG_THUMB2_KERNEL
 #define NORMAL_ISA "16"

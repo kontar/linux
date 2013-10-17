@@ -10,7 +10,7 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
-
+#include <linux/kprobes.h>
 #include "kprobes-test.h"
 
 
@@ -55,7 +55,6 @@
 	".thumb				\n\t"			\
 	"2:	nop			\n\t"			\
 	TESTCASE_END
-
 
 void kprobe_thumb16_test_cases(void)
 {
@@ -134,6 +133,11 @@ void kprobe_thumb16_test_cases(void)
 
 	TEST_BF_R("bx	r",0, 2f+1,"")
 	TEST_BF_R("bx	r",14,2f+1,"")
+
+	/*while (wait_here)
+		cpu_relax();*/
+	/*wait_here = false;*/
+#if 1
 	TESTCASE_START("bx	pc")
 		TEST_ARG_REG(14, 99f+1)
 		TEST_ARG_END("")
@@ -147,7 +151,7 @@ void kprobe_thumb16_test_cases(void)
 		".thumb				\n\t"
 		"2:	nop			\n\t"
 	TESTCASE_END
-
+#endif
 	TEST_BF_R("blx	r",0, 2f+1,"")
 	TEST_BB_R("blx	r",14,2f+1,"")
 	TEST_UNSUPPORTED(".inst.n 0x47f8	@ blx pc")
@@ -261,9 +265,10 @@ DONT_TEST_IN_ITBLOCK(
 	TEST_POPPC("pop	{pc}",15*4)
 	TEST_POPPC("pop	{r0-r7,pc}",7*4)
 	TEST_POPPC("pop	{r1,r3,r5,r7,pc}",11*4)
+#if 1
 	TEST_THUMB_TO_ARM_INTERWORK_P("pop	{pc}	@ ",13,15*4,"")
 	TEST_THUMB_TO_ARM_INTERWORK_P("pop	{r0-r7,pc}	@ ",13,7*4,"")
-
+#endif
 	TEST_UNSUPPORTED("bkpt.n	0")
 	TEST_UNSUPPORTED("bkpt.n	255")
 
@@ -326,7 +331,9 @@ CONDITION_INSTRUCTIONS(8,
 
 	TEST_ITBLOCK("subs.n r0, r0")
 
-	verbose("\n");
+	verbose("finished Thumb16\n");
+	/*while(wait_here)
+		cpu_relax();*/
 }
 
 
@@ -340,6 +347,10 @@ void kprobe_thumb32_test_cases(void)
 	TEST_UNSUPPORTED("rfeia	sp")
 	TEST_UNSUPPORTED("rfedb	sp!")
 	TEST_UNSUPPORTED("rfeia	sp!")
+
+	/*while(wait_here)
+		cpu_relax();*/
+	/*wait_here = false;*/
 
 	TEST_P(   "stmia	r",0, 16*4,", {r0,r8}")
 	TEST_P(   "stmia	r",4, 16*4,", {r0-r12,r14}")
