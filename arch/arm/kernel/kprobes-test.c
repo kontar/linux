@@ -111,7 +111,9 @@
  *	@ TESTCASE_START
  *	bl	__kprobes_test_case_start
  *	@ start of inline data...
- *	.word	title_addr	 @ text title for test case
+ *	.ascii "mov r0, r7"	@ text title for test case
+ *	.byte	0
+ *	.align	2
  *
  *	@ TEST_ARG_REG
  *	.byte	ARG_TYPE_REG
@@ -963,7 +965,7 @@ void __naked __kprobes_test_case_start(void)
 	__asm__ __volatile__ (
 		"stmdb	sp!, {r4-r11}				\n\t"
 		"sub	sp, sp, #"__stringify(TEST_MEMORY_SIZE)"\n\t"
-		"bic	r0, lr, #3  @ r0 = inline title block	\n\t"
+		"bic	r0, lr, #1  @ r0 = inline title string	\n\t"
 		"mov	r1, sp					\n\t"
 		"bl	kprobes_test_case_start			\n\t"
 		"bx	r0					\n\t"
@@ -1341,7 +1343,7 @@ static unsigned long next_instruction(unsigned long pc)
 	return pc + 4;
 }
 
-static uintptr_t __used kprobes_test_case_start(const char **title, void *stack)
+static uintptr_t __used kprobes_test_case_start(const char *title, void *stack)
 {
 	struct test_arg *args;
 	struct test_arg_end *end_arg;
@@ -1349,9 +1351,9 @@ static uintptr_t __used kprobes_test_case_start(const char **title, void *stack)
 
 	pr_wait("%s: >>>>>\n", __func__);
 	pr_wait("%s: title: 0x%08lx, *title: 0x%08lx\n", __func__, title, *title);
-	args = (struct test_arg *)(title + 1);
+	args = (struct test_arg *)PTR_ALIGN(title + strlen(title) + 1, 4);
 	pr_wait("%s: args: 0x%08lx, stack: 0x%08lx\n", __func__, args, stack);
-	current_title = *title;
+	current_title = title;
 	current_args = args;
 	current_stack = stack;
 
