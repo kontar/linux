@@ -223,6 +223,7 @@ static int kretprobe_handler_called;
 #define FUNC_ARG1 0x12345678
 #define FUNC_ARG2 0xabcdef
 
+volatile bool wait_here = true;
 
 #ifndef CONFIG_THUMB2_KERNEL
 
@@ -962,7 +963,7 @@ void __naked __kprobes_test_case_start(void)
 	__asm__ __volatile__ (
 		"stmdb	sp!, {r4-r11}				\n\t"
 		"sub	sp, sp, #"__stringify(TEST_MEMORY_SIZE)"\n\t"
-		"bic	r0, lr, #1  @ r0 = inline title block	\n\t"
+		"bic	r0, lr, #3  @ r0 = inline title block	\n\t"
 		"mov	r1, sp					\n\t"
 		"bl	kprobes_test_case_start			\n\t"
 		"bx	r0					\n\t"

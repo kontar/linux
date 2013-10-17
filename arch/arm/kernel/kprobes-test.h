@@ -117,7 +117,6 @@ struct test_arg_end {
 	"9999: .ascii "#title"				\n\t"	\
 	".byte	0					\n\t"	\
 	".popsection					\n\t"	\
-	"@.align						\n\t"	\
 	".word	9999b					\n\t"
 
 #define	TEST_ARG_REG(reg, val)					\
