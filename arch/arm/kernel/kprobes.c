@@ -28,6 +28,9 @@
 #include <asm/traps.h>
 #include <asm/cacheflush.h>
 
+#include "probes.h"
+#include "probes-arm.h"
+#include "probes-thumb.h"
 #include "kprobes.h"
 #include "patch.h"
 
@@ -54,6 +57,7 @@ int __kprobes arch_prepare_kprobe(struct kprobe *p)
 	unsigned long addr = (unsigned long)p->addr;
 	bool thumb;
 	kprobe_decode_insn_t *decode_insn;
+	const union decode_item *actions;
 	int is;
 
 	if (in_exception_text(addr))
@@ -66,21 +70,26 @@ int __kprobes arch_prepare_kprobe(struct kprobe *p)
 	if (is_wide_instruction(insn)) {
 		insn <<= 16;
 		insn |= ((u16 *)addr)[1];
-		decode_insn = thumb32_kprobe_decode_insn;
-	} else
-		decode_insn = thumb16_kprobe_decode_insn;
+		decode_insn = thumb32_probes_decode_insn;
+		actions = kprobes_t32_actions;
+	} else {
+		decode_insn = thumb16_probes_decode_insn;
+		actions = kprobes_t16_actions;
+	}
 #else /* !CONFIG_THUMB2_KERNEL */
 	thumb = false;
 	if (addr & 0x3)
 		return -EINVAL;
 	insn = *p->addr;
-	decode_insn = arm_kprobe_decode_insn;
+	decode_insn = arm_probes_decode_insn;
+	actions = kprobes_arm_actions;
 #endif
 
 	p->opcode = insn;
 	p->ainsn.insn = tmp_insn;
 
-	switch ((*decode_insn)(insn, &p->ainsn)) {
+	switch ((*decode_insn)(insn, &p->ainsn,
+			       false, actions)) {
 	case INSN_REJECTED:	/* not supported */
 		return -EINVAL;
 
@@ -92,7 +101,7 @@ int __kprobes arch_prepare_kprobe(struct kprobe *p)
 			p->ainsn.insn[is] = tmp_insn[is];
 		flush_insns(p->ainsn.insn,
 				sizeof(p->ainsn.insn[0]) * MAX_INSN_SIZE);
-		p->ainsn.insn_fn = (kprobe_insn_fn_t *)
+		p->ainsn.insn_fn = (probes_insn_fn_t *)
 					((uintptr_t)p->ainsn.insn | thumb);
 		break;
 
@@ -197,7 +206,7 @@ singlestep_skip(struct kprobe *p, struct pt_regs *regs)
 static inline void __kprobes
 singlestep(struct kprobe *p, struct pt_regs *regs, struct kprobe_ctlblk *kcb)
 {
-	p->ainsn.insn_singlestep(p, regs);
+	p->ainsn.insn_singlestep(p->opcode, p->addr, &p->ainsn, regs);
 }
 
 /*
@@ -607,7 +616,7 @@ static struct undef_hook kprobes_arm_break_hook = {
 
 int __init arch_init_kprobes()
 {
-	arm_kprobe_decode_init();
+	arm_probes_decode_init();
 #ifdef CONFIG_THUMB2_KERNEL
 	register_undef_hook(&kprobes_thumb16_break_hook);
 	register_undef_hook(&kprobes_thumb32_break_hook);
