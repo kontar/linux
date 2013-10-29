@@ -36,8 +36,6 @@
 #include <linux/usb/phy.h>
 #include <linux/platform_data/s3c-hsotg.h>
 
-#include <mach/map.h>
-
 #include "s3c-hsotg.h"
 
 static const char * const s3c_hsotg_supply_names[] = {
@@ -139,6 +137,7 @@ struct s3c_hsotg_ep {
  * @regs: The memory area mapped for accessing registers.
  * @irq: The IRQ number we are using
  * @supplies: Definition of USB power supplies
+ * @phyif: PHY interface width
  * @dedicated_fifos: Set if the hardware has dedicated IN-EP fifos.
  * @num_of_eps: Number of available EPs (excluding EP0)
  * @debug_root: root directrory for debugfs.
@@ -166,6 +165,7 @@ struct s3c_hsotg {
 
 	struct regulator_bulk_data supplies[ARRAY_SIZE(s3c_hsotg_supply_names)];
 
+	u32			phyif;
 	unsigned int		dedicated_fifos:1;
 	unsigned char           num_of_eps;
 
@@ -2214,7 +2214,7 @@ static void s3c_hsotg_core_init(struct s3c_hsotg *hsotg)
 	 */
 
 	/* set the PLL on, remove the HNP/SRP and set the PHY */
-	writel(GUSBCFG_PHYIf16 | GUSBCFG_TOutCal(7) |
+	writel(hsotg->phyif | GUSBCFG_TOutCal(7) |
 	       (0x5 << 10), hsotg->regs + GUSBCFG);
 
 	s3c_hsotg_init_fifo(hsotg);
@@ -3449,9 +3449,11 @@ static int s3c_hsotg_probe(struct platform_device *pdev)
 	struct s3c_hsotg_plat *plat = dev_get_platdata(&pdev->dev);
 	struct usb_phy *phy;
 	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
 	struct s3c_hsotg_ep *eps;
 	struct s3c_hsotg *hsotg;
 	struct resource *res;
+	u32 phy_utmi_width = 16;
 	int epnum;
 	int ret;
 	int i;
@@ -3539,6 +3541,17 @@ static int s3c_hsotg_probe(struct platform_device *pdev)
 	if (ret) {
 		dev_err(hsotg->dev, "failed to enable supplies: %d\n", ret);
 		goto err_supplies;
+	}
+
+	/* Set default UTMI width */
+	hsotg->phyif = GUSBCFG_PHYIf16;
+	if (np) {
+		of_property_read_u32(np, "snps,phy-utmi-width",
+				     &phy_utmi_width);
+		if (phy_utmi_width == 8)
+			hsotg->phyif = GUSBCFG_PHYIf8;
+		if ((phy_utmi_width != 8) && (phy_utmi_width != 16))
+			dev_warn(dev, "invalid snps,phy-utmi-width value\n");
 	}
 
 	/* usb phy enable */
@@ -3647,6 +3660,7 @@ static int s3c_hsotg_remove(struct platform_device *pdev)
 #ifdef CONFIG_OF
 static const struct of_device_id s3c_hsotg_of_ids[] = {
 	{ .compatible = "samsung,s3c6400-hsotg", },
+	{ .compatible = "snps,dwc2", },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, s3c_hsotg_of_ids);

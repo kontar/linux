@@ -1,0 +1,10 @@
+BROADCOM KONA USB PHY
+
+Required properties:
+ - compatible: brcm,kona-usb2
+
+Example:
+
+	usbphy: usbphy {
+		compatible = "brcm,kona-usb2";
+	};
