@@ -95,4 +95,5 @@ config CLK_PPC_CORENET
 
 endmenu
 
+source "drivers/clk/hisilicon/Kconfig"
 source "drivers/clk/mvebu/Kconfig"
