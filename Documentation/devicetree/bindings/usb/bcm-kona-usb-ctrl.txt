@@ -1,0 +1,12 @@
+BROADCOM KONA USB CONTROL
+
+Required properties:
+ - compatible: brcm,kona-ctrl-usb
+ - reg: offset and length of the USB control registers
+
+Example:
+
+	usbctl: usbctl@3f130000 {
+		compatible = "brcm,kona-ctrl-usb";
+		reg = <0x3f130000 0x28>;
+	};
