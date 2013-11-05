@@ -24,6 +24,7 @@ config ARCH_EXYNOS4
 
 config ARCH_EXYNOS5
 	bool "SAMSUNG EXYNOS5"
+	select ARCH_SUPPORTS_BIG_ENDIAN
 	select HAVE_ARM_SCU if SMP
 	select HAVE_SMP
 	select PINCTRL
