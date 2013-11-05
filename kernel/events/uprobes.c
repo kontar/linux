@@ -248,6 +248,12 @@ static int verify_opcode(struct page *page, unsigned long vaddr, uprobe_opcode_t
  * have fixed length instructions.
  */
 
+void __weak arch_uprobe_write_opcode(struct arch_uprobe *auprobe, void *vaddr,
+				     uprobe_opcode_t opcode)
+{
+	memcpy(vaddr, &opcode, UPROBE_SWBP_INSN_SIZE);
+}
+
 /*
  * write_opcode - write the opcode at a given virtual address.
  * @mm: the probed process address space.
@@ -260,11 +266,12 @@ static int verify_opcode(struct page *page, unsigned long vaddr, uprobe_opcode_t
  * For mm @mm, write the opcode at @vaddr.
  * Return 0 (success) or a negative errno.
  */
-static int write_opcode(struct mm_struct *mm, unsigned long vaddr,
-			uprobe_opcode_t opcode)
+static int write_opcode(struct arch_uprobe *auprobe, struct mm_struct *mm,
+			unsigned long vaddr, uprobe_opcode_t opcode)
 {
 	struct page *old_page, *new_page;
 	struct vm_area_struct *vma;
+	void *vaddr_new;
 	int ret;
 
 retry:
@@ -285,7 +292,10 @@ retry:
 	__SetPageUptodate(new_page);
 
 	copy_highpage(new_page, old_page);
-	copy_to_page(new_page, vaddr, &opcode, UPROBE_SWBP_INSN_SIZE);
+	vaddr_new = kmap_atomic(new_page);
+	arch_uprobe_write_opcode(auprobe, vaddr_new + (vaddr & ~PAGE_MASK),
+				 opcode);
+	kunmap_atomic(vaddr_new);
 
 	ret = anon_vma_prepare(vma);
 	if (ret)
@@ -314,7 +324,7 @@ put_old:
  */
 int __weak set_swbp(struct arch_uprobe *auprobe, struct mm_struct *mm, unsigned long vaddr)
 {
-	return write_opcode(mm, vaddr, UPROBE_SWBP_INSN);
+	return write_opcode(auprobe, mm, vaddr, UPROBE_SWBP_INSN);
 }
 
 /**
@@ -329,7 +339,8 @@ int __weak set_swbp(struct arch_uprobe *auprobe, struct mm_struct *mm, unsigned 
 int __weak
 set_orig_insn(struct arch_uprobe *auprobe, struct mm_struct *mm, unsigned long vaddr)
 {
-	return write_opcode(mm, vaddr, *(uprobe_opcode_t *)auprobe->insn);
+	return write_opcode(auprobe, mm, vaddr,
+			    *(uprobe_opcode_t *)auprobe->insn);
 }
 
 static int match_uprobe(struct uprobe *l, struct uprobe *r)
@@ -1238,6 +1249,11 @@ static unsigned long xol_take_insn_slot(struct xol_area *area)
 	return slot_addr;
 }
 
+void __weak arch_uprobe_xol_copy(struct arch_uprobe *auprobe, void *vaddr)
+{
+	memcpy(vaddr, auprobe->insn, MAX_UINSN_BYTES);
+}
+
 /*
  * xol_get_insn_slot - allocate a slot for xol.
  * Returns the allocated slot address or 0.
@@ -1246,6 +1262,7 @@ static unsigned long xol_get_insn_slot(struct uprobe *uprobe)
 {
 	struct xol_area *area;
 	unsigned long xol_vaddr;
+	void *kaddr;
 
 	area = get_xol_area();
 	if (!area)
@@ -1256,7 +1273,9 @@ static unsigned long xol_get_insn_slot(struct uprobe *uprobe)
 		return 0;
 
 	/* Initialize the slot */
-	copy_to_page(area->page, xol_vaddr, uprobe->arch.insn, MAX_UINSN_BYTES);
+	kaddr = kmap_atomic(area->page);
+	arch_uprobe_xol_copy(&uprobe->arch, kaddr + (xol_vaddr & ~PAGE_MASK));
+	kunmap_atomic(kaddr);
 	/*
 	 * We probably need flush_icache_user_range() but it needs vma.
 	 * This should work on supported architectures too.
@@ -1732,9 +1751,6 @@ static void handle_swbp(struct pt_regs *regs)
 		return;
 	}
 
-	/* change it in advance for ->handler() and restart */
-	instruction_pointer_set(regs, bp_vaddr);
-
 	/*
 	 * TODO: move copy_insn/etc into _register and remove this hack.
 	 * After we hit the bp, _unregister + _register can install the
@@ -1742,16 +1758,26 @@ static void handle_swbp(struct pt_regs *regs)
 	 */
 	smp_rmb(); /* pairs with wmb() in install_breakpoint() */
 	if (unlikely(!test_bit(UPROBE_COPY_INSN, &uprobe->flags)))
-		goto out;
+		goto restart;
 
 	handler_chain(uprobe, regs);
+
+	if (arch_uprobe_ignore(&uprobe->arch, regs))
+		goto out;
+
 	if (can_skip_sstep(uprobe, regs))
 		goto out;
 
 	if (!pre_ssout(uprobe, regs, bp_vaddr))
 		return;
 
-	/* can_skip_sstep() succeeded, or restart if can't singlestep */
+restart:
+	/*
+	 * cannot singlestep; cannot skip instruction;
+	 * re-execute the instruction.
+	 */
+	instruction_pointer_set(regs, bp_vaddr);
+
 out:
 	put_uprobe(uprobe);
 }
@@ -1845,8 +1871,14 @@ static struct notifier_block uprobe_exception_nb = {
 	.priority		= INT_MAX-1,	/* notified after kprobes, kgdb */
 };
 
+int __weak __init arch_uprobes_init(void)
+{
+	return 0;
+}
+
 static int __init init_uprobes(void)
 {
+	int ret;
 	int i;
 
 	for (i = 0; i < UPROBES_HASH_SZ; i++)
@@ -1854,6 +1886,10 @@ static int __init init_uprobes(void)
 
 	if (percpu_init_rwsem(&dup_mmap_sem))
 		return -ENOMEM;
+
+	ret = arch_uprobes_init();
+	if (ret)
+		return ret;
 
 	return register_die_notifier(&uprobe_exception_nb);
 }

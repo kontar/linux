@@ -52,9 +52,6 @@
 
 #else /* CONFIG_KPROBES */
 typedef int kprobe_opcode_t;
-struct arch_specific_insn {
-	int dummy;
-};
 #endif /* CONFIG_KPROBES */
 
 struct kprobe;
@@ -110,7 +107,11 @@ struct kprobe {
 	kprobe_opcode_t opcode;
 
 	/* copy of the original instruction */
+#ifdef CONFIG_KPROBES
 	struct arch_specific_insn ainsn;
+#else
+	int ainsn;
+#endif
 
 	/*
 	 * Indicates various status flags.

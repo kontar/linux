@@ -204,6 +204,9 @@
 
 #include <asm/opcodes.h>
 
+#include "probes.h"
+#include "probes-arm.h"
+#include "probes-thumb.h"
 #include "kprobes.h"
 #include "kprobes-test.h"
 
@@ -357,6 +360,7 @@ static int test_kprobe(long (*func)(long, long))
 	return 0;
 }
 
+#ifndef CONFIG_THUMB2_KERNEL
 static void __kprobes jprobe_func(long r0, long r1)
 {
 	jprobe_func_called = test_func_instance;
@@ -400,6 +404,7 @@ static int test_jprobe(long (*func)(long, long))
 
 	return 0;
 }
+#endif
 
 static int __kprobes
 kretprobe_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
@@ -455,10 +460,12 @@ static int run_api_tests(long (*func)(long, long))
 	if (ret < 0)
 		return ret;
 
+#ifndef CONFIG_THUMB2_KERNEL
 	pr_info("    jprobe\n");
 	ret = test_jprobe(func);
 	if (ret < 0)
 		return ret;
+#endif
 
 	pr_info("    kretprobe\n");
 	ret = test_kretprobe(func);
@@ -1608,7 +1615,7 @@ static int __init run_all_tests(void)
 		goto out;
 
 	pr_info("ARM instruction simulation\n");
-	ret = run_test_cases(kprobe_arm_test_cases, kprobe_decode_arm_table);
+	ret = run_test_cases(kprobe_arm_test_cases, probes_decode_arm_table);
 	if (ret)
 		goto out;
 
@@ -1631,13 +1638,13 @@ static int __init run_all_tests(void)
 
 	pr_info("16-bit Thumb instruction simulation\n");
 	ret = run_test_cases(kprobe_thumb16_test_cases,
-				kprobe_decode_thumb16_table);
+				probes_decode_thumb16_table);
 	if (ret)
 		goto out;
 
 	pr_info("32-bit Thumb instruction simulation\n");
 	ret = run_test_cases(kprobe_thumb32_test_cases,
-				kprobe_decode_thumb32_table);
+				probes_decode_thumb32_table);
 	if (ret)
 		goto out;
 #endif
