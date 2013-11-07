@@ -401,6 +401,32 @@ err_req:
 	return ret;
 }
 
+#ifdef CONFIG_PM
+static int pl031_suspend(struct device *dev)
+{
+	struct amba_device *adev = to_amba_device(dev);
+
+	if (adev->irq[0] >= 0 && device_may_wakeup(&adev->dev))
+		enable_irq_wake(adev->irq[0]);
+	return 0;
+}
+
+static int pl031_resume(struct device *dev)
+{
+	struct amba_device *adev = to_amba_device(dev);
+
+	if (adev->irq[0] >= 0 && device_may_wakeup(&adev->dev))
+		disable_irq_wake(adev->irq[0]);
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(pl031_pm, pl031_suspend, pl031_resume);
+
+#define PL031_PM (&pl031_pm)
+#else
+#define PL031_PM NULL
+#endif
+
 /* Operations for the original ARM version */
 static struct pl031_vendor_data arm_pl031 = {
 	.ops = {
@@ -470,6 +496,7 @@ MODULE_DEVICE_TABLE(amba, pl031_ids);
 static struct amba_driver pl031_driver = {
 	.drv = {
 		.name = "rtc-pl031",
+		.pm = PL031_PM,
 	},
 	.id_table = pl031_ids,
 	.probe = pl031_probe,
