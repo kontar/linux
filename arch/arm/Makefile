@@ -36,6 +36,8 @@ MMUEXT		:= -nommu
 KBUILD_CFLAGS	+= $(call cc-option,-mno-unaligned-access)
 endif
 
+KBUILD_CFLAGS	+= $(call as-instr,.inst 0x0,-DARM_HAVE_INST)
+
 ifeq ($(CONFIG_FRAME_POINTER),y)
 KBUILD_CFLAGS	+=-fno-omit-frame-pointer -mapcs -mno-sched-prolog
 endif
