@@ -14,6 +14,7 @@
 #include <linux/kernel.h>
 #include <linux/kprobes.h>
 #include <asm/system_info.h>
+#include <asm/opcodes.h>
 
 #include "kprobes.h"
 
@@ -154,7 +155,8 @@ kprobe_decode_ldmstm(probes_opcode_t insn, struct arch_specific_insn *asi,
 
 	if (handler) {
 		/* We can emulate the instruction in (possibly) modified form */
-		asi->insn[0] = (insn & 0xfff00000) | (rn << 16) | reglist;
+		asi->insn[0] = __opcode_to_mem_arm((insn & 0xfff00000) |
+							(rn << 16) | reglist);
 		asi->insn_handler = handler;
 		return INSN_GOOD;
 	}
