@@ -199,12 +199,18 @@ extern asmlinkage unsigned int arm_check_condition(u32 opcode, u32 psr);
  */
 #include <linux/stringify.h>
 
+#ifdef ARM_HAVE_INST
+#define __inst_arm(x) ___inst_arm(x)
+#define __inst_thumb32(x) ___inst_thumb32(x)
+#define __inst_thumb16(x) ___inst_thumb16(x)
+#else /* ! ARM_HAVE_INST */
 #define __inst_arm(x) ___inst_arm(___asm_opcode_to_mem_arm(x))
 #define __inst_thumb32(x) ___inst_thumb32(				\
 	___asm_opcode_to_mem_thumb16(___asm_opcode_thumb32_first(x)),	\
 	___asm_opcode_to_mem_thumb16(___asm_opcode_thumb32_second(x))	\
 )
 #define __inst_thumb16(x) ___inst_thumb16(___asm_opcode_to_mem_thumb16(x))
+#endif /* ! ARM_HAVE_INST */
 
 #ifdef CONFIG_THUMB2_KERNEL
 #define __inst_arm_thumb16(arm_opcode, thumb_opcode) \
@@ -216,16 +222,36 @@ extern asmlinkage unsigned int arm_check_condition(u32 opcode, u32 psr);
 #define __inst_arm_thumb32(arm_opcode, thumb_opcode) __inst_arm(arm_opcode)
 #endif
 
-/* Helpers for the helpers.  Don't use these directly. */
+/*
+ * Helpers for the helpers.  Don't use these directly.
+ * Note that the interface for these depends on whether or not ARM_HAVE_INST
+ * is defined.
+ */
 #ifdef __ASSEMBLY__
+
+#ifdef ARM_HAVE_INST
+#define ___inst_arm(x) .inst x
+#define ___inst_thumb16(x) .inst.n x
+#define ___inst_thumb32(x) .inst.w x
+#else /* ! ARM_HAVE_INST */
 #define ___inst_arm(x) .long x
 #define ___inst_thumb16(x) .short x
 #define ___inst_thumb32(first, second) .short first, second
-#else
+#endif /* ! ARM_HAVE_INST */
+
+#else /* ! __ASSEMBLY__ */
+
+#ifdef ARM_HAVE_INST
+#define ___inst_arm(x) ".inst " __stringify(x) "\n\t"
+#define ___inst_thumb16(x) ".inst.n " __stringify(x) "\n\t"
+#define ___inst_thumb32(x) ".inst.w " __stringify(x) "\n\t"
+#else /* ! ARM_HAVE_INST */
 #define ___inst_arm(x) ".long " __stringify(x) "\n\t"
 #define ___inst_thumb16(x) ".short " __stringify(x) "\n\t"
 #define ___inst_thumb32(first, second) \
 	".short " __stringify(first) ", " __stringify(second) "\n\t"
-#endif
+#endif /* ! ARM_HAVE_INST */
+
+#endif /* ! __ASSEMBLY__ */
 
 #endif /* __ASM_ARM_OPCODES_H */
