@@ -11,7 +11,7 @@
  * this list of conditions and the following disclaimer in the documentation
  * and/or other materials provided with the distribution.
  *
- * Neither the name of ARM nor the names of its contributors may be used
+ * Neither the name of the ARM nor the names of its contributors may be used
  * to endorse or promote products derived from this software without specific
  * prior written permission.
  *
@@ -37,7 +37,7 @@
 
 / {
 	model = "FVP Base";
-	compatible = "arm,vfp-base", "arm,vexpress";
+	compatible = "arm,fvp-base", "arm,vexpress";
 	interrupt-parent = <&gic>;
 	#address-cells = <2>;
 	#size-cells = <2>;
@@ -87,49 +87,23 @@
 			reg = <0x0 0x3>;
 			enable-method = "psci";
 		};
-		cpu@100 {
-			device_type = "cpu";
-			compatible = "arm,armv8";
-			reg = <0x0 0x100>;
-			enable-method = "psci";
-		};
-		cpu@101 {
-			device_type = "cpu";
-			compatible = "arm,armv8";
-			reg = <0x0 0x101>;
-			enable-method = "psci";
-		};
-		cpu@102 {
-			device_type = "cpu";
-			compatible = "arm,armv8";
-			reg = <0x0 0x102>;
-			enable-method = "psci";
-		};
-		cpu@103 {
-			device_type = "cpu";
-			compatible = "arm,armv8";
-			reg = <0x0 0x103>;
-			enable-method = "psci";
-		};
 	};
 
 	memory@80000000 {
 		device_type = "memory";
-		reg = <0x00000000 0x80000000 0 0x80000000>;
-		/*
+		reg = <0x00000000 0x80000000 0 0x80000000>,
 		      <0x00000008 0x80000000 0 0x80000000>;
-		*/
 	};
 
-	gic: interrupt-controller@2c001000 {
+	gic: interrupt-controller@2f000000 {
 		compatible = "arm,cortex-a15-gic", "arm,cortex-a9-gic";
 		#interrupt-cells = <3>;
 		#address-cells = <0>;
 		interrupt-controller;
-		reg = <0x0 0x2c001000 0 0x1000>,
-		      <0x0 0x2c002000 0 0x1000>,
-		      <0x0 0x2c004000 0 0x2000>,
-		      <0x0 0x2c006000 0 0x2000>;
+		reg = <0x0 0x2f000000 0 0x10000>,
+		      <0x0 0x2c000000 0 0x2000>,
+		      <0x0 0x2c010000 0 0x2000>,
+		      <0x0 0x2c02F000 0 0x2000>;
 		interrupts = <1 9 0xf04>;
 	};
 
@@ -222,29 +196,6 @@
 				<0 0 41 &gic 0 41 4>,
 				<0 0 42 &gic 0 42 4>;
 
-		/include/ "rtsm_ve-motherboard.dtsi"
-	};
-
-	panels {
-		panel@0 {
-			compatible	= "panel";
-			mode		= "XVGA";
-			refresh		= <60>;
-			xres		= <1024>;
-			yres		= <768>;
-			pixclock	= <15748>;
-			left_margin	= <152>;
-			right_margin	= <48>;
-			upper_margin	= <23>;
-			lower_margin	= <3>;
-			hsync_len	= <104>;
-			vsync_len	= <4>;
-			sync		= <0>;
-			vmode		= "FB_VMODE_NONINTERLACED";
-			tim2		= "TIM2_BCD", "TIM2_IPC";
-			cntl		= "CNTL_LCDTFT", "CNTL_BGR", "CNTL_LCDVCOMP(1)";
-			caps		= "CLCD_CAP_5551", "CLCD_CAP_565", "CLCD_CAP_888";
-			bpp		= <16>;
-		};
+		/include/ "fvp-foundation-motherboard.dtsi"
 	};
 };
