@@ -451,12 +451,12 @@ void kprobe_arm_test_cases(void)
 #endif
 	TEST_UNSUPPORTED(__inst_arm(0xe142f091) " @ swpb pc, r1, [r2]")
 
-	TEST_UNSUPPORTED(".word	0xe1100090") /* Unallocated space */
-	TEST_UNSUPPORTED(".word	0xe1200090") /* Unallocated space */
-	TEST_UNSUPPORTED(".word	0xe1300090") /* Unallocated space */
-	TEST_UNSUPPORTED(".word	0xe1500090") /* Unallocated space */
-	TEST_UNSUPPORTED(".word	0xe1600090") /* Unallocated space */
-	TEST_UNSUPPORTED(".word	0xe1700090") /* Unallocated space */
+	TEST_UNSUPPORTED(__inst_arm(0xe1100090)) /* Unallocated space */
+	TEST_UNSUPPORTED(__inst_arm(0xe1200090)) /* Unallocated space */
+	TEST_UNSUPPORTED(__inst_arm(0xe1300090)) /* Unallocated space */
+	TEST_UNSUPPORTED(__inst_arm(0xe1500090)) /* Unallocated space */
+	TEST_UNSUPPORTED(__inst_arm(0xe1600090)) /* Unallocated space */
+	TEST_UNSUPPORTED(__inst_arm(0xe1700090)) /* Unallocated space */
 #if __LINUX_ARM_ARCH__ >= 6
 	TEST_UNSUPPORTED("ldrex	r2, [sp]")
 #endif
