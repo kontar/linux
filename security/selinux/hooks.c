@@ -706,6 +706,18 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 
 	if (!ss_initialized) {
 		if (!num_opts) {
+			/*
+			 * Special handling for rootfs. Is genfs but supports
+			 * setting SELinux context on in-core inodes.
+			 *
+			 * Chicken and egg problem: policy may reside in rootfs
+			 * but for initramfs code to fill in attributes, it
+			 * needs selinux to allow that.
+			 */
+			if (!strncmp(sb->s_type->name, "rootfs",
+				     sizeof("rootfs")))
+				sbsec->flags |= SBLABEL_MNT;
+
 			/* Defer initialization until selinux_complete_init,
 			   after the initial policy is loaded and the security
 			   server is ready to handle calls. */
