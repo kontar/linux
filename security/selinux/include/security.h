@@ -52,6 +52,7 @@
 #define ROOTCONTEXT_MNT	0x04
 #define DEFCONTEXT_MNT	0x08
 #define SBLABEL_MNT	0x10
+#define DELAYAFTERINIT_MNT 0x20
 /* Non-mount related flags */
 #define SE_SBINITIALIZED	0x0100
 #define SE_SBPROC		0x0200

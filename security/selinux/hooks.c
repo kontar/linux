@@ -716,7 +716,7 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 			 */
 			if (!strncmp(sb->s_type->name, "rootfs",
 				     sizeof("rootfs")))
-				sbsec->flags |= SBLABEL_MNT;
+				sbsec->flags |= SBLABEL_MNT|DELAYAFTERINIT_MNT;
 
 			/* Defer initialization until selinux_complete_init,
 			   after the initial policy is loaded and the security
@@ -3253,12 +3253,19 @@ static void selinux_inode_post_setxattr(struct dentry *dentry, const char *name,
 {
 	struct inode *inode = d_backing_inode(dentry);
 	struct inode_security_struct *isec;
+	struct superblock_security_struct *sbsec;
 	u32 newsid;
 	int rc;
 
 	if (strcmp(name, XATTR_NAME_SELINUX)) {
 		/* Not an attribute we recognize, so nothing to do. */
 		return;
+	}
+
+	if (!ss_initialized) {
+		sbsec = inode->i_sb->s_security;
+		if (sbsec->flags & DELAYAFTERINIT_MNT)
+			return;
 	}
 
 	rc = security_context_to_sid_force(value, size, &newsid);
