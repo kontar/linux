@@ -266,16 +266,7 @@ static int __init do_header(void)
 	state = do_skip;
 	if (name_len <= 0 || name_len > PATH_MAX)
 		return 0;
-	if (S_ISLNK(mode)) {
-		if (body_len > PATH_MAX)
-			return 0;
-		collect = collected = symlink_buf;
-		remains = N_ALIGN(name_len) + body_len;
-		next_state = do_symlink;
-		state = do_collect;
-		return 0;
-	}
-	if (S_ISREG(mode) || !body_len)
+	if (S_ISREG(mode) || S_ISLNK(mode) || !body_len)
 		read_into(name_buf, N_ALIGN(name_len), do_name);
 	return 0;
 }
@@ -372,6 +363,11 @@ static int __init do_name(void)
 			sys_chmod(collected, mode);
 			do_utime(collected, mtime);
 		}
+	} else if (S_ISLNK(mode)) {
+		if (body_len > PATH_MAX)
+			return 0;
+		memcpy_optional(name_buf, collected, N_ALIGN(name_len));
+		read_into(symlink_buf, body_len, do_symlink);
 	}
 	return 0;
 }
@@ -397,11 +393,12 @@ static int __init do_copy(void)
 
 static int __init do_symlink(void)
 {
-	collected[N_ALIGN(name_len) + body_len] = '\0';
-	clean_path(collected, 0);
-	sys_symlink(collected + N_ALIGN(name_len), collected);
-	sys_lchown(collected, uid, gid);
-	do_utime(collected, mtime);
+	memcpy_optional(symlink_buf, collected, body_len);
+	symlink_buf[body_len] = '\0';
+	clean_path(name_buf, 0);
+	sys_symlink(symlink_buf, name_buf);
+	sys_lchown(name_buf, uid, gid);
+	do_utime(name_buf, mtime);
 	state = do_skip;
 	next_state = do_reset;
 	return 0;
@@ -453,7 +450,7 @@ static char * __init unpack_to_rootfs(char *buf, unsigned long len)
 	static __initdata char msg_buf[64];
 
 	header_buf = kmalloc(110, GFP_KERNEL);
-	symlink_buf = kmalloc(PATH_MAX + N_ALIGN(PATH_MAX) + 1, GFP_KERNEL);
+	symlink_buf = kmalloc(PATH_MAX + 1, GFP_KERNEL);
 	name_buf = kmalloc(N_ALIGN(PATH_MAX), GFP_KERNEL);
 
 	if (!header_buf || !symlink_buf || !name_buf)
