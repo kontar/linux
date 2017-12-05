@@ -306,6 +306,7 @@ static int __init do_xattrs(void);
 static int __init do_create(void);
 static int __init do_copy(void);
 static int __init do_symlink(void);
+static int __init do_setxattrs(void);
 static int __init do_reset(void);
 
 typedef int (*fsm_state_t)(void);
@@ -468,7 +469,7 @@ static int __init do_name(void)
 
 static int __init do_xattrs(void)
 {
-	/* Do nothing for now */
+	memcpy_optional(xattr_buf, collected, xattr_len);
 	state = do_create;
 	return 0;
 }
@@ -477,8 +478,7 @@ static __initdata int wfd;
 
 static int __init do_create(void)
 {
-	state = do_skip;
-	next_state = do_reset;
+	state = do_setxattrs;
 	clean_path(name_buf, mode);
 	if (S_ISREG(mode)) {
 		int ml = maybe_link(name_buf);
@@ -511,8 +511,11 @@ static int __init do_create(void)
 			do_utime(name_buf, &mtime);
 		}
 	} else if (S_ISLNK(mode)) {
-		if (body_len > PATH_MAX)
+		if (body_len > PATH_MAX) {
+			state = do_skip;
+			next_state = do_reset;
 			return 0;
+		}
 		read_into(symlink_buf, body_len, do_symlink);
 	}
 	return 0;
@@ -526,7 +529,7 @@ static int __init do_copy(void)
 		sys_close(wfd);
 		do_utime(name_buf, &mtime);
 		eat(body_len);
-		state = do_skip;
+		state = do_setxattrs;
 		return 0;
 	} else {
 		if (xwrite(wfd, victim, byte_count) != byte_count)
@@ -545,8 +548,52 @@ static int __init do_symlink(void)
 	sys_symlink(symlink_buf, name_buf);
 	sys_lchown(name_buf, uid, gid);
 	do_utime(name_buf, &mtime);
+	state = do_setxattrs;
+	return 0;
+}
+
+struct xattr_hdr {
+	char c_size[8]; /* total size including c_size field */
+	char c_data[];  /* <name>\0<value> */
+};
+
+static int __init do_setxattrs(void)
+{
+	char *buf = xattr_buf;
+	char *bufend = buf + xattr_len;
+	struct xattr_hdr *hdr;
+	char str[sizeof(hdr->c_size) + 1];
+
 	state = do_skip;
 	next_state = do_reset;
+	if (!xattr_len)
+		return 0;
+
+	str[sizeof(hdr->c_size)] = 0;
+
+	while (buf < bufend) {
+		char *xattr_name, *xattr_value;
+		unsigned long xattr_entry_size, xattr_value_size;
+		int ret;
+
+		hdr = (struct xattr_hdr *)buf;
+		memcpy(str, hdr->c_size, sizeof(hdr->c_size));
+		ret = kstrtoul(str, 16, &xattr_entry_size);
+		buf += xattr_entry_size;
+		if (ret || buf > bufend) {
+			error("malformed xattrs");
+			break;
+		}
+
+		xattr_name = hdr->c_data;
+		xattr_value = xattr_name + strlen(xattr_name) + 1;
+		xattr_value_size = buf - xattr_value;
+
+		ret = sys_lsetxattr(name_buf, xattr_name, xattr_value,
+				xattr_value_size, 0);
+		pr_debug("%s: %s size: %lu val: %s (ret: %d)\n", name_buf,
+				xattr_name, xattr_value_size, xattr_value, ret);
+	}
 	return 0;
 }
 
