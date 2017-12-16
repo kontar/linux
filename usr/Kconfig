@@ -52,6 +52,17 @@ config INITRAMFS_ROOT_GID
 
 	  If you are not sure, leave it set to "0".
 
+config INITRAMFS_NEWCX
+	bool "Use newcx CPIO format for initramfs"
+	depends on INITRAMFS_SOURCE!=""
+	default n
+	help
+	  If selected "usr/gen_init_cpio" will generate newcx CPIO archive
+	  format that supports extended attributes.
+
+	  See <file:Documentation/early-userspace/buffer-format.txt> for
+	  more details.
+
 config RD_GZIP
 	bool "Support initial ramdisk/ramfs compressed using gzip"
 	depends on BLK_DEV_INITRD
