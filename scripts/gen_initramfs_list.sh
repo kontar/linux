@@ -232,6 +232,7 @@ cpio_file=
 cpio_list=
 cpio_opts=
 include_xattrs=false
+keep_list=false
 output="/dev/stdout"
 output_file=""
 is_cpio_compressed=
@@ -293,6 +294,9 @@ while [ $# -gt 0 ]; do
 			cpio_opts="-x"
 			include_xattrs=true
 			;;
+		"-k")	# keep file list
+			keep_list=true
+			;;
 		"-h")
 			usage
 			exit 0
@@ -327,7 +331,9 @@ if [ ! -z ${output_file} ]; then
 	else
 		cpio_tfile=${cpio_file}
 	fi
-	rm ${cpio_list}
+
+	$keep_list && mv ${cpio_list} ${output_file}.list || rm ${cpio_list}
+
 	if [ "${is_cpio_compressed}" = "compressed" ]; then
 		cat ${cpio_tfile} > ${output_file}
 	else
